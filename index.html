@@ -1,42 +1,2227 @@
-<!-- ... existing code ... -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>115年新竹縣志工表揚大會｜即時報到協作系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f1f5f9;
+        }
+        .tab-active {
+            border-bottom: 3px solid #2563eb;
+            color: #1d4ed8;
+            font-weight: 700;
+            background-color: #eff6ff;
+        }
+        .desk-btn-active {
+            background-color: #1e40af !important;
+            color: #ffffff !important;
+            border-color: #1e40af !important;
+            box-shadow: 0 2px 6px rgba(30, 64, 175, 0.35);
+        }
+        .desk-btn-active div {
+            color: #ffffff !important;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- 頂部狀態與即時推播橫幅 -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600 p-2 rounded-lg">
+                        <i class="fa-solid fa-clipboard-check text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-base sm:text-xl font-black tracking-wide">115年新竹縣志工表揚大會｜即時報到協作系統</h1>
+                            <span id="cloud-status-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
+                                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> 連線中...
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">完整473筆名冊・領隊一鍵回報(可恢復)・同名自動連動(排除陳瑞珍)・金獎重複上台/銀銅榮譽不重複</p>
+                    </div>
+                </div>
+
+                <!-- 全場即時數據儀表板 -->
+                <div class="flex items-center gap-2 sm:gap-4 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 text-xs sm:text-sm">
+                    <div class="text-center">
+                        <span class="text-slate-400 block text-[11px]">總名冊</span>
+                        <span id="stat-total" class="font-bold text-white">473</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-700"></div>
+                    <div class="text-center">
+                        <span class="text-emerald-400 block text-[11px]">已報到</span>
+                        <span id="stat-checked" class="font-black text-emerald-400 text-base">0</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-700"></div>
+                    <div class="text-center">
+                        <span class="text-rose-400 block text-[11px]">未到/缺席</span>
+                        <span id="stat-absent" class="font-black text-rose-400 text-base">0</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-700"></div>
+                    <div class="text-center">
+                        <span class="text-amber-300 block text-[11px]">待報到</span>
+                        <span id="stat-pending" class="font-bold text-amber-300">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 即時跑馬燈通知區 -->
+            <div id="live-alert-bar" class="mt-2 bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-1.5 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <span class="bg-red-600 text-white px-2 py-0.5 rounded font-bold shrink-0 animate-pulse">即時動態</span>
+                    <span id="latest-broadcast" class="text-slate-200 truncate">已載入完整 473 筆受獎名冊（含同名連動與跨獎項上台規則）！</span>
+                </div>
+                <span class="text-slate-400 shrink-0 ml-2 hidden sm:inline" id="clock-display"></span>
+            </div>
+        </div>
+
+        <!-- 五大工作組別分頁導覽 -->
+        <nav class="bg-white text-slate-600 border-b border-slate-200 overflow-x-auto">
+            <div class="max-w-7xl mx-auto px-2 sm:px-6 flex whitespace-nowrap">
+                <button onclick="switchTab('checkin')" id="tab-checkin" class="tab-active px-4 py-3 text-sm flex items-center gap-2 transition">
+                    <i class="fa-solid fa-user-check"></i> 1. 報到組主控台 (1~9桌)
+                </button>
+                <button onclick="switchTab('marshal')" id="tab-marshal" class="px-4 py-3 text-sm flex items-center gap-2 hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-people-arrows"></i> 2. 檢錄組帶位看板
+                </button>
+                <button onclick="switchTab('award')" id="tab-award" class="px-4 py-3 text-sm flex items-center gap-2 hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-award"></i> 3. 頒獎組獎狀調度
+                    <span id="badge-pull-cert" class="bg-red-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold hidden">0</span>
+                </button>
+                <button onclick="switchTab('mc')" id="tab-mc" class="px-4 py-3 text-sm flex items-center gap-2 hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-microphone-lines"></i> 4. 主持人台帳 (含貴賓唱名)
+                </button>
+                <button onclick="switchTab('vip')" id="tab-vip" class="px-4 py-3 text-sm flex items-center gap-2 hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-crown text-amber-500"></i> 5. 貴賓動態牆
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-3 sm:px-6 py-5">
+
+        <!-- ================= 1. 報到組主控台 ================= -->
+        <section id="view-checkin" class="space-y-4">
+            <!-- 報到桌次快速切換 (1~9桌依序排列 + 進出口功能) -->
+            <div class="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
-                        <i class="fa-solid fa-table-cells text-indigo-600"></i> 報到桌次快速切換（第 1～4 桌個人/專案報到 ｜ 第 5～9 桌領隊統一報到區）：
+                        <i class="fa-solid fa-table-cells text-indigo-600"></i> 報到桌次快速切換（第 1～9 桌依序排列）：
                     </span>
-                    <button onclick="confirmResetCloudData()" class="text-xs font-bold text-indigo-600 hover:text-red-600 underline">
-                        重置雲端為最新 V6 初始名冊 (473筆)
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="openResetDefaultModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-rotate"></i> 載入/重設為 473 筆最新名冊
+                        </button>
+                        <button onclick="openRosterImportModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-file-import"></i> 匯入 Excel 名冊
+                        </button>
+                        <button onclick="exportRosterCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-file-export"></i> 匯出報到報表 (CSV)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 9 桌依序排列按鈕（含各桌即時人數與分組說明） -->
+                <div class="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-1.5" id="desk-selector-grid">
+                    <button onclick="selectDesk('1')" id="desk-btn-1" class="desk-btn px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-left hover:bg-slate-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-indigo-700 font-black">第 1 桌</span>
+                            <span id="desk-stat-1" class="text-[10px] text-slate-500">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 truncate mt-0.5">評鑑1~10／金1~45</div>
+                    </button>
+                    <button onclick="selectDesk('2')" id="desk-btn-2" class="desk-btn px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-left hover:bg-slate-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-indigo-700 font-black">第 2 桌</span>
+                            <span id="desk-stat-2" class="text-[10px] text-slate-500">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 truncate mt-0.5">金46~96／純金領隊</div>
+                    </button>
+                    <button onclick="selectDesk('3')" id="desk-btn-3" class="desk-btn px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-left hover:bg-slate-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-indigo-700 font-black">第 3 桌</span>
+                            <span id="desk-stat-3" class="text-[10px] text-slate-500">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 truncate mt-0.5">貴賓／標竿1~5／支援1~10</div>
+                    </button>
+                    <button onclick="selectDesk('4')" id="desk-btn-4" class="desk-btn px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-left hover:bg-slate-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-indigo-700 font-black">第 4 桌</span>
+                            <span id="desk-stat-4" class="text-[10px] text-slate-500">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 truncate mt-0.5">表演團隊／大會服務台</div>
+                    </button>
+                    <button onclick="selectDesk('5')" id="desk-btn-5" class="desk-btn px-2 py-2 rounded-lg border border-emerald-300 bg-emerald-50/40 text-xs font-bold text-left hover:bg-emerald-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-emerald-800 font-black">第 5 桌</span>
+                            <span id="desk-stat-5" class="text-[10px] text-emerald-700">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-emerald-700 truncate mt-0.5">領隊01~19 (文/地/動/教)</div>
+                    </button>
+                    <button onclick="selectDesk('6')" id="desk-btn-6" class="desk-btn px-2 py-2 rounded-lg border border-emerald-300 bg-emerald-50/40 text-xs font-bold text-left hover:bg-emerald-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-emerald-800 font-black">第 6 桌</span>
+                            <span id="desk-stat-6" class="text-[10px] text-emerald-700">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-emerald-700 truncate mt-0.5">領隊20~31 (衛/環/警)</div>
+                    </button>
+                    <button onclick="selectDesk('7')" id="desk-btn-7" class="desk-btn px-2 py-2 rounded-lg border border-emerald-300 bg-emerald-50/40 text-xs font-bold text-left hover:bg-emerald-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-emerald-800 font-black">第 7 桌</span>
+                            <span id="desk-stat-7" class="text-[10px] text-emerald-700">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-emerald-700 truncate mt-0.5">領隊32~43 (警/民/消/社)</div>
+                    </button>
+                    <button onclick="selectDesk('8')" id="desk-btn-8" class="desk-btn px-2 py-2 rounded-lg border border-emerald-300 bg-emerald-50/40 text-xs font-bold text-left hover:bg-emerald-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-emerald-800 font-black">第 8 桌</span>
+                            <span id="desk-stat-8" class="text-[10px] text-emerald-700">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-emerald-700 truncate mt-0.5">領隊44~54 (社會處)</div>
+                    </button>
+                    <button onclick="selectDesk('9')" id="desk-btn-9" class="desk-btn px-2 py-2 rounded-lg border border-emerald-300 bg-emerald-50/40 text-xs font-bold text-left hover:bg-emerald-50 transition">
+                        <div class="flex justify-between items-center">
+                            <span class="text-emerald-800 font-black">第 9 桌</span>
+                            <span id="desk-stat-9" class="text-[10px] text-emerald-700">0/0</span>
+                        </div>
+                        <div class="text-[10px] text-emerald-700 truncate mt-0.5">領隊55~64 (社會處)</div>
+                    </button>
+                    <button onclick="selectDesk('ALL')" id="desk-btn-ALL" class="desk-btn desk-btn-active px-2 py-2 rounded-lg border border-slate-300 text-xs font-bold text-left transition">
+                        <div class="font-black">全部 9 桌總覽</div>
+                        <div class="text-[10px] opacity-80 truncate mt-0.5">跨桌搜尋 / 全場檢視</div>
                     </button>
                 </div>
 
-                <!-- 9 桌分頁按鈕 -->
-<!-- ... existing code ... -->
-            const infoBanner = document.getElementById('desk-info-banner');
-            const cfg = DESK_CONFIG[currentDesk];
-            infoBanner.innerHTML = `
-                <div class="font-bold flex items-center gap-2">
-                    <i class="fa-solid fa-circle-info text-indigo-600"></i>
-                    <span>${cfg.desc}</span>
+                <!-- 搜尋與狀態過濾 -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-1 border-t border-slate-100">
+                    <div class="sm:col-span-5 relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="search-input" onkeyup="renderCheckinView()" placeholder="搜尋手冊編號、姓名、服務單位、領隊序號或座位..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div class="sm:col-span-3">
+                        <select id="filter-batch" onchange="renderCheckinView()" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="ALL">所有受獎組別 (全梯次)</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-4 flex gap-1.5">
+                        <button onclick="setStatusFilter('ALL')" id="btn-f-all" class="flex-1 py-2 px-2 rounded-lg text-xs font-black bg-slate-800 text-white shadow-sm">全部</button>
+                        <button onclick="setStatusFilter('PENDING')" id="btn-f-pending" class="flex-1 py-2 px-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">待報到</button>
+                        <button onclick="setStatusFilter('CHECKED')" id="btn-f-checked" class="flex-1 py-2 px-2 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100">已報到</button>
+                        <button onclick="setStatusFilter('ABSENT')" id="btn-f-absent" class="flex-1 py-2 px-2 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100">缺席</button>
+                    </div>
                 </div>
-            `;
-<!-- ... existing code ... -->
-            // 監聽雲端主資料變化（任何手機修改都會觸發這裡）
-            dbRef.on("value", (snapshot) => {
-                const cloudData = snapshot.val();
-                if (!cloudData || !cloudData.records) {
-                    // 第一次使用：自動將初始 473 筆 V6 名冊與貴賓名單上傳至 Firebase 雲端
-                    pushFullDataToCloud("系統初始化：已將 V6 正式名冊（473筆）上傳至雲端資料庫！");
+            </div>
+
+            <!-- 領隊單位分組提示（當檢視含領隊序號的桌次時顯示） -->
+            <div id="leader-mode-banner" class="hidden bg-emerald-50 border border-emerald-300 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-emerald-900 text-xs sm:text-sm">
+                    <i class="fa-solid fa-users-rectangle text-lg text-emerald-600"></i>
+                    <span><strong>領隊單位分組模式</strong>：點擊右上角<strong>「🎉 該單位全員出席」</strong>可一鍵完成報到（若誤按可再點<strong>「↩️ 取消全員出席」</strong>恢復）；同一人在不同編號報到時會自動連動同步！</span>
+                </div>
+            </div>
+
+            <!-- 報到資料呈現區 -->
+            <div id="checkin-content-area"></div>
+        </section>
+
+        <!-- ================= 2. 檢錄組帶位看板 ================= -->
+        <section id="view-marshal" class="hidden space-y-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-black text-blue-900"><i class="fa-solid fa-person-walking-arrow-right mr-1"></i> 檢錄組｜梯次帶位與席位巡檢看板</h2>
+                    <p class="text-xs text-blue-700 mt-0.5">支援「顯示全部梯次」與「梯次名稱」對照；可勾選個別人員<strong>「已入列」</strong>並點擊<strong>「🚩 已完成整隊」</strong>同步通知主持人與頒獎組。</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <label class="inline-flex items-center gap-1.5 bg-white px-3 py-2 rounded-lg border border-blue-200 text-xs font-bold text-blue-900 cursor-pointer shadow-sm select-none">
+                        <input type="checkbox" id="marshal-hide-completed" onchange="renderMarshalView()" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4">
+                        <span>隱藏已完成整隊的梯次</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-bold text-blue-900">選擇檢錄梯次：</label>
+                        <select id="marshal-batch-select" onchange="renderMarshalView()" class="px-3 py-2 border border-blue-300 rounded-lg text-sm font-bold bg-white text-blue-900 max-w-xs sm:max-w-md"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6" id="marshal-cards-container"></div>
+        </section>
+
+        <!-- ================= 3. 頒獎組獎狀調度 ================= -->
+        <section id="view-award" class="hidden space-y-4">
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2.5">
+                <div>
+                    <h2 class="text-base font-black text-red-900"><i class="fa-solid fa-triangle-exclamation mr-1"></i> 頒獎組｜需抽離獎狀／獎座即時警示清單</h2>
+                    <p class="text-xs text-red-700 mt-0.5">凡報到組標記為「❌ 未到/缺席」之受獎者（不含純領隊與不上台項目），系統自動在此列出，請於該梯次上台前 5 分鐘抽離對應獎狀！</p>
+                </div>
+                <div id="award-ready-batches-bar" class="hidden bg-emerald-50 border border-emerald-300 rounded-lg px-3 py-2 text-xs text-emerald-900 flex flex-wrap items-center gap-1.5"></div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-red-600 text-white text-xs uppercase">
+                            <th class="py-3 px-4">上台梯次</th>
+                            <th class="py-3 px-4">手冊編號</th>
+                            <th class="py-3 px-4">座位</th>
+                            <th class="py-3 px-4">缺席受獎人</th>
+                            <th class="py-3 px-4">服務單位</th>
+                            <th class="py-3 px-4">獎項名稱</th>
+                            <th class="py-3 px-4">現場備註</th>
+                        </tr>
+                    </thead>
+                    <tbody id="award-pull-tbody" class="divide-y divide-slate-200 text-sm"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ================= 4. 主持人台帳 ================= -->
+        <section id="view-mc" class="hidden space-y-5">
+            <!-- 上方區塊：已到場貴賓唱名名單 -->
+            <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div>
+                        <h2 class="text-base font-black text-amber-900 flex items-center gap-2">
+                            <i class="fa-solid fa-crown text-amber-600"></i> 【已到場貴賓唱名名單】即時同步區
+                        </h2>
+                        <p class="text-xs text-amber-800 mt-0.5">貴賓接待組點選「已到場」或「改派代表」後會自動出現在此，主持人介紹完畢請點選右側<strong>「🎙️ 標記已唱名」</strong>。</p>
+                    </div>
+                    <div class="text-xs font-bold bg-white px-3 py-1.5 rounded-lg border border-amber-200 text-amber-900">
+                        已到場貴賓：<span id="mc-vip-arrived-count" class="text-emerald-700 font-black">0</span> 位 ｜ 已唱名：<span id="mc-vip-announced-count" class="text-indigo-700 font-black">0</span> 位
+                    </div>
+                </div>
+                <div id="mc-vip-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5"></div>
+            </div>
+
+            <!-- 下方區塊：受獎人司儀唱名台帳 -->
+            <div class="space-y-3">
+                <div class="bg-slate-800 text-white rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-base font-black"><i class="fa-solid fa-microphone mr-1 text-amber-400"></i> 受獎人即時司儀台帳（自動過濾純領隊、不重複銀銅榮譽與缺席者）</h2>
+                        <p class="text-xs text-slate-300 mt-0.5">金級與金質獎重複者正常上台；已領金級/金質獎或銀銅榮譽重複者已自動過濾不上台。缺席者自動劃線變灰。</p>
+                        <div id="mc-ready-batches-bar" class="hidden mt-2 text-xs bg-emerald-900/60 border border-emerald-500/50 text-emerald-200 px-2.5 py-1.5 rounded-lg"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="mc-batch-select" onchange="renderMCView()" class="px-3 py-2 rounded-lg text-sm font-bold bg-slate-700 text-white border border-slate-600 max-w-xs sm:max-w-md"></select>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 text-xs">
+                                <th class="py-3 px-4 w-44">梯次 / 整隊狀態</th>
+                                <th class="py-3 px-4 w-28">編號/座位</th>
+                                <th class="py-3 px-4">唱名姓名（含改派代表提示）</th>
+                                <th class="py-3 px-4">服務單位</th>
+                                <th class="py-3 px-4">獎項名稱</th>
+                                <th class="py-3 px-4 w-28">報到狀態</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mc-tbody" class="divide-y divide-slate-200 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 5. 貴賓動態牆 ================= -->
+        <section id="view-vip" class="hidden space-y-4">
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-black text-amber-900"><i class="fa-solid fa-crown mr-1 text-amber-600"></i> 貴賓接待組｜長官與頒獎人動態回報</h2>
+                    <p class="text-xs text-amber-800 mt-0.5">點選「✅ 已到場」或「🔄 改派代表」後，將立即同步至<strong>主持人台帳最上方</strong>供司儀唱名。</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="openVipImportModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-import"></i> 匯入貴賓邀請名單
+                    </button>
+                    <button onclick="openAddVipModal()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> 單筆新增貴賓
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="vip-grid"></div>
+        </section>
+
+    </main>
+
+    <!-- 單筆新增貴賓彈窗 -->
+    <div id="add-vip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-crown text-amber-500"></i> 單筆新增貴賓
+                </h3>
+                <button onclick="closeAddVipModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">貴賓單位與職稱 <span class="text-red-500">*</span></label>
+                    <input type="text" id="new-vip-title" placeholder="例如：新竹縣政府 副縣長" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">貴賓姓名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="new-vip-name" placeholder="例如：陳見賢" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">負責頒獎梯次或任務（選填）</label>
+                    <input type="text" id="new-vip-task" placeholder="例如：頒發金級獎（第 1-3 梯次）" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">接待備註（選填）</label>
+                    <input type="text" id="new-vip-note" placeholder="例如：由秘書陪同入座主桌" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeAddVipModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">取消</button>
+                <button onclick="saveNewVip()" class="px-5 py-2 rounded-xl text-xs font-black text-white bg-amber-600 hover:bg-amber-700 shadow">確認新增並同步雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯入真實受獎名冊彈窗 -->
+    <div id="roster-import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-excel text-indigo-600"></i> 批次匯入 Excel 受獎名冊
+                </h3>
+                <button onclick="closeRosterImportModal()" class="text-slate-400 hover:text-slate-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-900 space-y-1.5">
+                <p class="font-black">📋 請直接從您的 Excel 名冊複製資料貼入下方框內：</p>
+                <p>每一行代表一位受獎人或領隊，欄位順序請對齊為 8 欄（以 Tab 或逗號分隔，若含標題列系統會自動略過）：</p>
+                <p class="font-mono bg-white p-2 rounded border border-indigo-200 text-slate-700">
+                    手冊編號 ｜ 領隊序號(無則留空) ｜ 報到桌次(1~9) ｜ 座位編號 ｜ 真實姓名 ｜ 服務單位 ｜ 獎項名稱 ｜ 受獎組別
+                </p>
+            </div>
+            <div>
+                <textarea id="roster-import-textarea" rows="8" placeholder="請在此貼上從 Excel 複製的受獎人資料..." class="w-full p-3 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeRosterImportModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">取消</button>
+                <button onclick="executeRosterImport()" class="px-5 py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow">確認覆蓋並同步至雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯入貴賓邀請名單彈窗 -->
+    <div id="vip-import-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-import text-emerald-600"></i> 批次匯入貴賓邀請名單
+                </h3>
+                <button onclick="closeVipImportModal()" class="text-slate-400 hover:text-slate-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 space-y-1">
+                <p class="font-bold text-slate-800">📋 使用方式（直接從 Excel 複製貼上即可）：</p>
+                <p>每一行代表一位貴賓，欄位請依序為：<strong>單位與職稱 [Tab或逗號] 貴賓姓名 [Tab或逗號] 負責頒獎梯次/任務(選填) [Tab或逗號] 接待備註(選填)</strong></p>
+            </div>
+            <div>
+                <textarea id="vip-import-textarea" rows="6" placeholder="請在此貼上從 Excel 複製的貴賓名單..." class="w-full p-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div class="flex items-center gap-4 text-xs font-bold text-slate-700">
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="vip-import-mode" value="append" checked class="text-emerald-600"> 附加在現有名單後方
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="vip-import-mode" value="replace" class="text-red-600"> 覆蓋現有貴賓名單
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="closeVipImportModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">取消</button>
+                    <button onclick="executeVipImport()" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow">確認匯入並同步</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 改派代表輸入彈窗 -->
+    <div id="proxy-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-user-pen text-indigo-600"></i> 登記改派代表出席
+                </h3>
+                <button onclick="closeProxyModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="proxy-target-info" class="bg-indigo-50 text-indigo-900 text-xs p-3 rounded-xl font-bold"></div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">請輸入實際出席代表職稱與姓名：</label>
+                <input type="text" id="proxy-name-input" placeholder="例如：秘書 王大明" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeProxyModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">取消</button>
+                <button onclick="saveProxyData()" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow">確認儲存並標記出席</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入/重設為 473 筆最新名冊確認彈窗 -->
+    <div id="reset-default-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+            <div class="flex items-center gap-3 text-amber-600 mb-3">
+                <i class="fa-solid fa-rotate text-2xl"></i>
+                <h3 class="text-lg font-black text-slate-800">載入最新 473 筆完整名冊？</h3>
+            </div>
+            <p class="text-sm text-slate-600 leading-relaxed mb-5">
+                確定要將雲端資料庫更新為完整 473 筆最新受獎名冊（含同名連動規則、金獎重複上台及銀銅榮譽不重複設定）嗎？
+            </p>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeResetDefaultModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">取消</button>
+                <button onclick="executeResetToPdfRoster()" class="px-4 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 shadow transition">確認載入並同步雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮動 Toast 提示 -->
+    <div id="toast-box" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2.5 text-sm font-bold">
+            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+            <span id="toast-msg"></span>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 完整 473 筆受獎名冊資料庫（手冊編號 1～473）
+        // 格式：[手冊編號, 姓名, 領隊序號, 服務單位, 獎項名稱, 受獎組別, 座位編號, 報到桌次, 預設狀態, 預設時間, 預設備註]
+        // 規則：
+        // - 金級獎(1-3)與衛福部金質獎(1-4)重複需重複上台（保留原組別）
+        // - 已領金級/金質獎者，不再於銀/銅/榮譽梯次上台（組別設為 X，標示不重複上台）
+        // - 銀/銅/榮譽獎重複者，僅計算一位上台（重複低階項目設為 X）
+        // ==========================================
+        const PDF_RAW_ROSTER = [
+            ["1","鄒陳碧珠","標竿1","新竹縣政府文化局","標竿志工","1-1","A-1","3"],
+            ["2","黃俊傑","標竿2","社團法人台灣喆城永續輔導管理顧問公益協會","標竿志工","1-1","A-2","3"],
+            ["3","DESIRIE DE GUZMAN","標竿3","台灣國際青少年聯合協會","標竿志工","1-1","A-3","3"],
+            ["4","葉清江","標竿4","新竹縣政府文化局","標竿志工","1-1","A-4","3"],
+            ["5","許容瑄","標竿5","新竹縣新住民家庭服務中心","標竿志工","1-1","A-5","3"],
+            ["6","李國鋒","評鑑1","新竹縣湖口鄉老人會","社綜類運單評鑑","1-2","B-1","1"],
+            ["7","黃巧蓮","評鑑2","新竹縣竹北市竹北社區發展協會","社綜類運單評鑑","1-2","B-2","1"],
+            ["8","陳國堯","評鑑3","新竹縣四謙友愛志工守望相助協會","社綜類運單評鑑","1-2","B-3","1"],
+            ["9","湯雅鈴","評鑑4","新竹縣新埔鎮鹿鳴社區發展協會","社綜類運單評鑑","1-2","B-4","1"],
+            ["10","周德君","評鑑5","社會處橫山社會福利服務中心","社綜類運單評鑑","1-2","B-5","1"],
+            ["11","沈朋源","評鑑6","新竹縣家祿儲蓄互助社","社綜類運單評鑑","1-2","B-6","1"],
+            ["12","劉淑慎","評鑑7","新竹縣銀髮族協會","社綜類運單評鑑","1-2","B-7","1"],
+            ["13","劉美玲","評鑑8","新竹縣湖口鄉波羅社區發展協會","社綜類運單評鑑","1-2","B-8","1"],
+            ["14","楊炤文","評鑑9","新竹縣社區學習照顧服務協會","社綜類運單評鑑","1-2","B-9","1"],
+            ["15","鐘新亮","評鑑10","新竹縣新埔鎮新北社區發展協會","社綜類運單評鑑","1-2","B-10","1"],
+            ["16","羅瑞乾","金1","新竹縣新住民家庭服務中心","金級獎","1-3","A-7","1"],
+            ["17","周德雨","金2","新竹縣湖口鄉長嶺社區發展協會","金級獎","1-3","A-8","1"],
+            ["18","張莉伶","金3","新竹縣湖口鄉長嶺社區發展協會","金級獎","1-3","A-9","1"],
+            ["19","溫嬌妹","金4","新竹縣湖口鄉長嶺社區發展協會","金級獎","1-3","A-10","1"],
+            ["20","李新蘭","金5","新竹縣竹北社區大學","金級獎","1-3","A-11","1"],
+            ["21","陳麗珠","金6","新竹縣竹北社區大學","金級獎","1-3","A-12","1"],
+            ["22","陳妙玲","金7","新竹縣竹北社區大學","金級獎","1-3","A-13","1"],
+            ["23","吳双杏","金8","新竹縣竹北社區大學","金級獎","1-3","A-14","1"],
+            ["24","高嬪嬪","金9","新竹縣竹北社區大學","金級獎","1-3","B-11","1"],
+            ["25","戴貴香","金10","新竹縣湖口鄉鳳凰社區發展協會","金級獎","1-3","B-12","1"],
+            ["26","戴玉英","金11","新竹縣湖口鄉鳳凰社區發展協會","金級獎","1-3","B-13","1"],
+            ["27","湯美玉","金12","新竹縣湖口鄉鳳凰社區發展協會","金級獎","1-3","B-14","1"],
+            ["28","胡菊蘭","金13","新竹縣湖口鄉鳳凰社區發展協會","金級獎","1-3","C-1","1"],
+            ["29","劉溫月妹","金14","新竹縣竹北市竹義社區發展協會","金級獎","1-3","C-2","1"],
+            ["30","嚴盛河","金15","新竹縣竹北市竹義社區發展協會","金級獎","1-3","C-3","1"],
+            ["31","吳玉環","金16","新竹縣竹北市竹義社區發展協會","金級獎","1-3","C-4","1"],
+            ["32","魏月霞","金17","新竹縣竹北市竹義社區發展協會","金級獎","1-3","C-5","1"],
+            ["33","彭森進","金18","社團法人台灣築心全人生命教育關懷協會","金級獎","1-3","C-6","1"],
+            ["34","林永波","金19","社團法人台灣築心全人生命教育關懷協會","金級獎","1-3","C-7","1"],
+            ["35","劉瑞香","金20","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-8","1"],
+            ["36","廖明鳳","金21","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-9","1"],
+            ["37","戴菊妹","金22","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-10","1"],
+            ["38","陳蘭香","金23","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-11","1"],
+            ["39","江櫻香","金24","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-12","1"],
+            ["40","黃美春","金25","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-13","1"],
+            ["41","鄭素鳳","金26","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","C-14","1"],
+            ["42","劉至淳","金27","新竹縣新埔鎮內立社區發展協會","金級獎","1-3","D-1","1"],
+            ["43","黃瑞媛","金28","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-2","1"],
+            ["44","劉振光","金29","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-3","1"],
+            ["45","詹明光","金30","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-4","1"],
+            ["46","林秀榮","金31","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-5","1"],
+            ["47","陳樹洲","金32","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-6","1"],
+            ["48","黃春玉","金33","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-7","1"],
+            ["49","林慧美","金34","新竹縣新埔鎮上寮社區發展協會","金級獎","1-3","D-8","1"],
+            ["50","詹雪","金35","衛生福利部社會及家庭署寧園安養院","金級獎","1-3","D-9","1"],
+            ["51","張德旺","金36","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","D-10","1"],
+            ["52","彭成奐","金37","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","D-11","1"],
+            ["53","黃淑媛","金38","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","D-12","1"],
+            ["54","陳金滿","金39","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","D-13","1"],
+            ["55","葉瑞媛","金40","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","D-14","1"],
+            ["56","吳海樹","金41","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","E-1","1"],
+            ["57","賴美珍","金42","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","E-2","1"],
+            ["58","陳鳳梅","金43","新竹縣新豐鄉中崙社區發展協會","金級獎","1-3","E-3","1"],
+            ["59","王秋云","金44","新竹縣湖口鄉老人會","金級獎","1-3","E-4","1"],
+            ["60","張貴清","金45","新竹縣湖口鄉老人會","金級獎","1-3","E-5","1"],
+            ["61","王瑞蓮","金46","中國醫藥大學新竹附設醫院","金級獎","1-3","E-6","2"],
+            ["62","邱婷涓","金47","中國醫藥大學新竹附設醫院","金級獎","1-3","E-7","2"],
+            ["63","陳秀英","金48","中國醫藥大學新竹附設醫院","金級獎","1-3","E-8","2"],
+            ["64","翁億倩","金49","中國醫藥大學新竹附設醫院","金級獎","1-3","E-9","2"],
+            ["65","黃清輝","金50","中國醫藥大學新竹附設醫院","金級獎","1-3","E-10","2"],
+            ["66","鄭滄德","金51","新竹捐血中心","金級獎","1-3","E-11","2"],
+            ["67","彭春桃","金52","國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院竹東院區","金級獎","1-3","E-12","2"],
+            ["68","彭麗娟","金53","東元醫療社團法人東元綜合醫院","金級獎","1-3","E-13","2"],
+            ["69","林瑞和","金54","新竹縣政府文化局","金級獎","1-3","F-1","2"],
+            ["70","沈瑞霞","金55","新竹縣政府文化局","金級獎","1-3","F-2","2"],
+            ["71","曾金蓮","金56","新竹縣政府文化局","金級獎","1-3","F-3","2"],
+            ["72","郭博文","金57","樹杞林文化館","金級獎","1-3","F-4","2"],
+            ["73","莊玉春","金58","樹杞林文化館","金級獎","1-3","F-5","2"],
+            ["74","陳素珍","金59","樹杞林文化館","金級獎","1-3","F-6","2"],
+            ["75","馮文平","金60","樹杞林文化館","金級獎","1-3","F-7","2"],
+            ["76","彭惠明","金61","樹杞林文化館","金級獎","1-3","F-8","2"],
+            ["77","陳麗華","金62","新竹縣竹北市中正國民小學","金級獎","1-3","F-9","2"],
+            ["78","曾瑞燕","金63","新竹縣竹北市中正國民小學","金級獎","1-3","F-10","2"],
+            ["79","李麗惠","金64","新竹縣竹北市中正國民小學","金級獎","1-3","F-11","2"],
+            ["80","范姜秀玉","金65","新竹縣竹北市中正國民小學","金級獎","1-3","F-12","2"],
+            ["81","曾芳枝","金66","新竹縣竹北市竹北國民小學","金級獎","1-3","F-13","2"],
+            ["82","劉秀容","金67","新竹縣家庭教育中心","金級獎","1-3","F-14","2"],
+            ["83","陳志汶","金68","新竹縣家庭教育中心","金級獎","1-3","G-1","2"],
+            ["84","曾淑惠","金69","新竹縣家庭教育中心","金級獎","1-3","G-2","2"],
+            ["85","彭幸枝","金70","新竹縣竹東鎮樂齡學習優質中心","金級獎","1-3","G-3","2"],
+            ["86","陳志中","金71","新竹縣立北埔國民中學","金級獎","1-3","G-4","2"],
+            ["87","蔡錦斷","金72","新竹縣政府消防局峨眉婦宣分隊","金級獎","1-3","G-5","2"],
+            ["88","李金蓮","金73","新竹縣政府消防局峨眉婦宣分隊","金級獎","1-3","G-6","2"],
+            ["89","鄭瑞蓮","金74","新竹縣政府消防局芎林分隊","金級獎","1-3","G-7","2"],
+            ["90","邱金菊","金75","新竹縣政府消防局芎林分隊","金級獎","1-3","G-8","2"],
+            ["91","劉張瑞森","金76","新竹縣政府消防局芎林分隊","金級獎","1-3","G-9","2"],
+            ["92","林雪梅","金77","新竹縣政府消防局芎林分隊","金級獎","1-3","G-10","2"],
+            ["93","謝春櫻","金78","新竹縣政府消防局芎林分隊","金級獎","1-3","G-11","2"],
+            ["94","范秋梅","金79","新竹縣政府消防局芎林分隊","金級獎","1-3","G-12","2"],
+            ["95","何溫鳳蓮","金80","新竹縣政府消防局芎林分隊","金級獎","1-3","G-13","2"],
+            ["96","孫足","金81","新竹縣政府消防局新工分隊","金級獎","1-3","G-14","2"],
+            ["97","駱寶伸","金82","新竹縣政府消防局新工分隊","金級獎","1-3","H-1","2"],
+            ["98","徐秀蘭","金83","新竹縣政府消防局新工分隊","金級獎","1-3","H-2","2"],
+            ["99","鄒燕妹","金84","新竹縣政府消防局新工分隊","金級獎","1-3","H-3","2"],
+            ["100","黃麗花","金85","新竹縣政府消防局新工分隊","金級獎","1-3","H-4","2"],
+            ["101","馮菊蘭","金86","新竹縣政府消防局新工分隊","金級獎","1-3","H-5","2"],
+            ["102","陳雪鳳","金87","新竹縣政府警察局竹東分局下公館派出所","金級獎","1-3","H-6","2"],
+            ["103","黃燕梅","金88","新竹縣政府警察局新湖分局新工派出所","金級獎","1-3","H-7","2"],
+            ["104","陳瑞珍","金89","新竹縣政府警察局新湖分局新工派出所","金級獎","1-3","H-8","2"],
+            ["105","朱鳳玉","金90","新竹縣竹北市竹北社區發展協會","衛福部金質獎","1-4","H-9","2"],
+            ["106","劉徐明珠","金91","新竹縣關西鎮東光社區發展協會","衛福部金質獎","1-4","H-10","2"],
+            ["107","周宥任","金92","社團法人新竹縣肢體障礙協會","衛福部金質獎","1-4","H-11","2"],
+            ["108","林月梅","金93","新竹縣湖口鄉老人會","衛福部金質獎","1-4","H-12","2"],
+            ["109","朱曼玲","金94","社團法人新竹縣生命線協會","衛福部金質獎","1-4","H-13","2"],
+            ["110","羅瑞乾","金95","新竹縣新住民家庭服務中心","衛福部金質獎","1-4","A-7","2"],
+            ["111","周德雨","金96","新竹縣湖口鄉長嶺社區發展協會","衛福部金質獎","1-4","A-8","2"],
+            ["112","盧宜","領1","新竹縣新住民家庭服務中心","領隊","X","A-6","2"],
+            ["113","郭秀惠","領2","東元醫療社團法人東元綜合醫院","領隊","X","E-14","2"],
+            ["114","吳曉洋","領3","社團法人新竹縣生命線協會","領隊","X","H-14","2"],
+            ["115","李武青","支援1","新竹縣志願服務協會","協辦單位(支援團隊)","1-5","I-1","3"],
+            ["116","鄧淑芳","支援2","新竹縣政府社會處捷力志工隊","協辦單位(支援團隊)","1-5","I-2","3"],
+            ["117","李國鋒","支援3","新竹縣湖口鄉老人會","協辦單位(支援團隊)","1-5","B-1","3"],
+            ["118","黃政權","支援4","新竹縣芎林鄉華龍社區發展協會","協辦單位(支援團隊)","1-5","I-3","3"],
+            ["119","劉淑慎","支援5","新竹縣銀髮族協會","協辦單位(支援團隊)","1-5","B-7","3"],
+            ["120","陳秀玲","支援6","歡樂青春智慧健康推廣協會","協辦單位(支援團隊)","1-5","I-4","3"],
+            ["121","范揚清","支援7","社團法人新竹縣社區大學發展協會","協辦單位(支援團隊)","1-5","I-5","3"],
+            ["122","田梅春","支援8","新竹縣竹北市竹北社區發展協會","協辦單位(支援團隊)","1-5","I-6","3"],
+            ["123","楊炤文","支援9","社團法人新竹縣社區學習照顧服務協會","協辦單位(支援團隊)","1-5","B-9","3"],
+            ["124","陳泰寧","支援10","新竹縣新埔鎮下寮社區發展協會","協辦單位(支援團隊)","1-5","I-7","3"],
+            ["125","卞泰植","表演1","台灣國際青少年聯合協會(12位)","協辦單位(表演團體)","1-5","I-8","4"],
+            ["126","彭秭榆","表演3","新竹縣桐花藝術教育協會(12位)","協辦單位(表演團體)","1-5","I-9","4"],
+            ["127","吳蓁蓁","01","新竹縣政府文化局","領隊","X","K-1","5"],
+            ["128","王德泉","01","新竹縣政府文化局","銀級獎","2-1","K-2","5"],
+            ["129","鄧明惠","01","新竹縣政府文化局","銀級獎","2-1","K-3","5"],
+            ["130","曾金蓮","01","新竹縣政府文化局","銀級獎(已領金級獎/不重複上台)","X","F-3","5","","","已領金級獎(#71)，不上台"],
+            ["131","范鳴珠","01","新竹縣政府文化局","銀級獎","2-1","K-4","5"],
+            ["132","黃莉喬","01","新竹縣政府文化局","銅級獎","2-1","K-5","5"],
+            ["133","曾金蓮","01","新竹縣政府文化局","銅級獎(已領金級獎/不重複上台)","X","F-3","5","","","已領金級獎(#71)，不上台"],
+            ["134","黃淑媜","01","新竹縣政府文化局","榮譽獎","2-1","K-6","5"],
+            ["135","李銘涵","01","新竹縣政府文化局","榮譽獎","2-1","K-7","5"],
+            ["136","姜欣妤","02","樹杞林文化館","領隊","X","K-8","5"],
+            ["137","劉如艾","02","樹杞林文化館","銀級獎","2-2","K-9","5"],
+            ["138","溫習相","02","樹杞林文化館","銀級獎","2-2","K-10","5"],
+            ["139","顏明哲","02","樹杞林文化館","銅級獎","2-2","K-11","5"],
+            ["140","徐翠萍","02","樹杞林文化館","榮譽獎","2-2","K-12","5"],
+            ["141","陳福昇","03","新湖地政事務所","領隊","X","K-14","5"],
+            ["142","林美君","03","新湖地政事務所","銀級獎","2-3","K-13","5"],
+            ["143","林雅燕","04","新竹縣動物保護防疫所","領隊","X","F-15","5"],
+            ["144","張廷亥","04","新竹縣動物保護防疫所","銀級獎","2-4","F-16","5"],
+            ["145","曾鴻祥","05","新竹縣立新豐國民小學","領隊","X","F-17","5"],
+            ["146","徐義棟","05","新竹縣立新豐國民小學","榮譽獎","2-5","F-18","5"],
+            ["147","許金靜","05","新竹縣立新豐國民小學","榮譽獎","2-5","F-19","5"],
+            ["148","張郁敏","06","新竹縣立興隆國民小學","領隊","X","F-20","5"],
+            ["149","簡怡琳","06","新竹縣立興隆國民小學","榮譽獎","2-6","F-21","5"],
+            ["150","莊曉芳","06","新竹縣立興隆國民小學","榮譽獎","2-6","F-22","5"],
+            ["151","蔡金惠","07","新竹縣立六家高級中學","領隊","X","F-23","5"],
+            ["152","范瑞珍","07","新竹縣立六家高級中學","榮譽獎","2-7","F-24","5"],
+            ["153","林君徵","08","新竹縣竹北市東興國民小學","領隊","X","F-25","5"],
+            ["154","羅心怡","08","新竹縣竹北市東興國民小學","榮譽獎","2-8","F-26","5"],
+            ["155","林秀琴","09","新竹縣立信勢國民小學(領隊)","銀級獎","2-9","F-27","5"],
+            ["156","詹秀珍","09","新竹縣立信勢國民小學","榮譽獎","2-9","F-28","5"],
+            ["157","陳妹好","10","新竹縣立中山國民小學","領隊","X","J-1","5"],
+            ["158","曾榮靈","10","新竹縣立中山國民小學","銀級獎","2-10","J-2","5"],
+            ["159","龔喬琪","10","新竹縣立中山國民小學","銅級獎","2-10","J-3","5"],
+            ["160","吳佳惠","10","新竹縣立中山國民小學","銅級獎","2-10","J-4","5"],
+            ["161","劉素琪","10","新竹縣立中山國民小學","榮譽獎","2-10","J-5","5"],
+            ["162","翁偉平","11","新竹縣竹北市博愛國民小學","領隊","X","J-6","5"],
+            ["163","蔡孟君","11","新竹縣竹北市博愛國民小學","銀級獎","2-11","J-7","5"],
+            ["164","彭玉英","11","新竹縣竹北市博愛國民小學","榮譽獎","2-11","J-7A","5"],
+            ["165","邱雅妍","12","新竹縣立安興國民小學","領隊","X","J-8","5"],
+            ["166","劉月銀","12","新竹縣立安興國民小學","銀級獎","2-12","J-9","5"],
+            ["167","劉炫融","12","新竹縣立安興國民小學","銅級獎","2-12","J-10","5"],
+            ["168","易偉麗","12","新竹縣立安興國民小學","榮譽獎","2-12","J-11","5"],
+            ["169","陳玉燕","13","新竹縣竹北市竹仁國民小學","領隊","X","J-12","5"],
+            ["170","陳秋霞","13","新竹縣竹北市竹仁國民小學","銀級獎","2-13","J-13","5"],
+            ["171","范綱森","14","新竹縣立仁愛國民中學(領隊)","榮譽獎","2-14","C-15","5"],
+            ["172","曾麗玲","15","新竹縣家庭教育中心","領隊","X","J-14","5"],
+            ["173","周敏翠","15","新竹縣家庭教育中心","銀級獎","2-15","I-10","5"],
+            ["174","毛治筑","15","新竹縣家庭教育中心","銀級獎","2-15","I-11","5"],
+            ["175","彭曼玲","15","新竹縣家庭教育中心","銀級獎","2-15","I-12","5"],
+            ["176","徐錦華","15","新竹縣家庭教育中心","銀級獎","2-15","I-13","5"],
+            ["177","洪雅鈴","15","新竹縣家庭教育中心","銅級獎","2-15","I-14","8"],
+            ["178","官有昇","16","新竹縣竹東鎮樂齡學習優質中心","領隊","X","M-14","5"],
+            ["179","陳瑞姬","16","新竹縣竹東鎮樂齡學習優質中心","銀級獎","2-16","M-13","5"],
+            ["180","吳紫湄","16","新竹縣竹東鎮樂齡學習優質中心","銀級獎","2-16","M-12","5"],
+            ["181","陳瑞姬","16","新竹縣竹東鎮樂齡學習優質中心","銅級獎(銀銅重複/僅計算一位上台)","X","M-13","5","","","銀銅重複(#179)，不上台"],
+            ["182","徐玉嬌","16","新竹縣竹東鎮樂齡學習優質中心","銅級獎","2-16","N-14","5"],
+            ["183","謝秋英","16","新竹縣竹東鎮樂齡學習優質中心","榮譽獎","2-16","N-13","5"],
+            ["184","黃婷","17","新竹縣竹北市中正國民小學","領隊","X","E-15","5"],
+            ["185","連秀嬌","17","新竹縣竹北市中正國民小學","銅級獎","2-17","E-16","5"],
+            ["186","羅志鴻","18","新竹縣竹北市竹北國民小學","領隊","X","E-17","5"],
+            ["187","林靜宜","18","新竹縣竹北市竹北國民小學","銅級獎","2-18","E-18","5"],
+            ["188","周蘭英","18","新竹縣竹北市竹北國民小學","榮譽獎","2-18","E-19","5"],
+            ["189","陳韻如","18","新竹縣竹北市竹北國民小學","榮譽獎","2-18","E-20","5"],
+            ["190","周怡君","19","新竹縣竹北市光明國民小學","領隊","X","E-21","5"],
+            ["191","曾瑞玉","19","新竹縣竹北市光明國民小學","銅級獎","2-19","E-22","5"],
+            ["192","陳妘菌","19","新竹縣竹北市光明國民小學","榮譽獎","2-19","E-23","5"],
+            ["193","洪育貞","19","新竹縣竹北市光明國民小學","榮譽獎","2-19","E-24","5"],
+            ["194","陳品價","20","中國醫藥大學新竹附設醫院","領隊","X","B-15","6"],
+            ["195","李淑暉","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-16","6"],
+            ["196","孟玉慧","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-17","6"],
+            ["197","黃小娥","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-18","6"],
+            ["198","韓國瑛","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-19","6"],
+            ["199","郭淑惠","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-20","6"],
+            ["200","黃桂香","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-21","6"],
+            ["201","邱碧霞","20","中國醫藥大學新竹附設醫院","銀級獎","2-20","B-22","6"],
+            ["202","林尹琪","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-23","6"],
+            ["203","韓永偉","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-24","6"],
+            ["204","張双慶","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-25","6"],
+            ["205","魏婉姿","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-26","6"],
+            ["206","周敏君","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-27","6"],
+            ["207","彭月圓","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","B-28","6"],
+            ["208","楊順華","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-16","6"],
+            ["209","楊文達","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-17","6"],
+            ["210","余慧萍","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-18","6"],
+            ["211","李婉祺","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-19","6"],
+            ["212","羅素貞","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-20","6"],
+            ["213","黃明容","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-21","6"],
+            ["214","陳寶珍","20","中國醫藥大學新竹附設醫院","銅級獎","2-20","C-22","6"],
+            ["215","郭秀梅","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-23","6"],
+            ["216","曾銀惠","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-24","6"],
+            ["217","洪美玉","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-25","6"],
+            ["218","江秀玉","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-26","6"],
+            ["219","邱淑媛","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-27","6"],
+            ["220","范庭偵","20","中國醫藥大學新竹附設醫院","榮譽獎","2-20","C-28","6"],
+            ["221","李秀英","21","新竹縣湖口鄉衛生所","領隊","X","E-25","6"],
+            ["222","劉貞枝","21","新竹縣湖口鄉衛生所","銀級獎","2-21","E-26","6"],
+            ["223","詹秋香","21","新竹縣湖口鄉衛生所","銅級獎","2-21","E-27","6"],
+            ["224","徐榮蔘","21","新竹縣湖口鄉衛生所","銅級獎","2-21","E-28","6"],
+            ["225","黃美惠","22","新竹捐血中心","領隊","X","G-15","6"],
+            ["226","王淑美","22","新竹捐血中心","銀級獎","2-22","G-16","6"],
+            ["227","葉宇宸","22","新竹捐血中心","銀級獎","2-22","G-17","6"],
+            ["228","林翠芬","22","新竹捐血中心","銅級獎","2-22","G-18","6"],
+            ["229","李昆原","22","新竹捐血中心","銅級獎","2-22","G-19","6"],
+            ["230","彭一川","22","新竹捐血中心","榮譽獎","2-22","G-20","6"],
+            ["231","羅木通","22","新竹捐血中心","榮譽獎","2-22","G-21","6"],
+            ["232","溫月霞","22","新竹捐血中心","榮譽獎","2-22","G-22","6"],
+            ["233","李宜庭","23","國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院竹東院區","領隊","X","H-15","6"],
+            ["234","許鏡妹","23","國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院竹東院區","榮譽獎","2-23","H-16","6"],
+            ["235","溫集福","23","國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院竹東院區","榮譽獎","2-23","H-17","6"],
+            ["236","邱梅珍","23","國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院竹東院區","榮譽獎","2-23","H-18","6"],
+            ["237","許美蓮","24","新竹縣湖口鄉信勢社區發展協會","領隊","X","H-28","6"],
+            ["238","余曉鳳","24","新竹縣湖口鄉信勢社區發展協會","銀級獎","2-24","H-19","6"],
+            ["239","李玟萱","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-20","6"],
+            ["240","黃瑞玉","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-21","6"],
+            ["241","劉丹妹","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-22","6"],
+            ["242","楊正生","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-23","6"],
+            ["243","盧吳繡珠","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-24","6"],
+            ["244","黃淑美","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-25","6"],
+            ["245","彭銀珍","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-26","6"],
+            ["246","官玉秀","24","新竹縣湖口鄉信勢社區發展協會","榮譽獎","2-24","H-27","6"],
+            ["247","陳瑞香","25","新竹縣政府警察局竹北分局竹北派出所(領隊)","銅級獎","2-25","I-15","6"],
+            ["248","曾素馨","25","新竹縣政府警察局竹北分局竹北派出所","銀級獎","2-25","I-16","6"],
+            ["249","李鈺清","26","新竹縣政府警察局竹北分局三民派出所","榮譽獎","2-26","I-17","6"],
+            ["250","陳瑞珍","27","新竹縣政府警察局新湖分局新工派出所","領隊","X","H-8","6"],
+            ["251","徐蕙芬","27","新竹縣政府警察局新湖分局新工派出所","銀級獎","2-27","I-18","6"],
+            ["252","戴素娟","27","新竹縣政府警察局新湖分局新工派出所","銀級獎","2-27","I-19","6"],
+            ["253","陳麗湄","27","新竹縣政府警察局新湖分局新工派出所","銅級獎","2-27","I-20","6"],
+            ["254","葉筆貞","27","新竹縣政府警察局新湖分局新工派出所","銅級獎","2-27","I-21","6"],
+            ["255","謝瑞美","28","新竹縣政府警察局竹北分局六家派出所","銅級獎","2-28","I-22","6"],
+            ["256","楊詠雪","29","新竹縣政府警察局竹北分局豐田派出所(領隊)","銅級獎","2-29","I-23","6"],
+            ["257","蔡戴淑卿","29","新竹縣政府警察局竹北分局豐田派出所","銅級獎","2-29","I-24","6"],
+            ["258","徐秋蓮","30","新竹縣政府警察局竹東分局下公館派出所(領隊)","銀級獎","2-30","I-25","6"],
+            ["259","陳瑞珍","31","新竹縣政府警察局竹北分局分局本部(領隊)","銀級獎","2-31","I-26","6"],
+            ["260","蘇陳月娥","31","新竹縣政府警察局竹北分局分局本部","銀級獎","2-31","I-27","6"],
+            ["261","楊鳳枝","31","新竹縣政府警察局竹北分局分局本部","銅級獎","2-31","I-28","6"],
+            ["262","林玥嬌","32","新竹縣政府警察局新湖分局山崎派出所(領隊)","銅級獎","2-32","J-15","7"],
+            ["263","謝素貴","32","新竹縣政府警察局新湖分局山崎派出所","銅級獎","2-32","J-16","7"],
+            ["264","藍清玫","32","新竹縣政府警察局新湖分局山崎派出所","銅級獎","2-32","J-17","7"],
+            ["265","陳麗蘭","32","新竹縣政府警察局新湖分局山崎派出所","銅級獎","2-32","J-18","7"],
+            ["266","古坤壽","32","新竹縣政府警察局新湖分局山崎派出所","銅級獎","2-32","J-19","7"],
+            ["267","林美花","32","新竹縣政府警察局新湖分局山崎派出所","榮譽獎","2-32","J-20","7"],
+            ["268","吳菊珠","33","新竹縣政府警察局竹東分局竹東派出所(領隊)","榮譽獎","2-33","J-21","7"],
+            ["269","黃月芬","33","新竹縣政府警察局竹東分局竹東派出所","榮譽獎","2-33","J-22","7"],
+            ["270","何開文","33","新竹縣政府警察局竹東分局竹東派出所","榮譽獎","2-33","J-23","7"],
+            ["271","塗淑惠","34","新竹縣寶山鄉戶政事務所","領隊","X","L-14","7"],
+            ["272","陳麗君","34","新竹縣寶山鄉戶政事務所","銅級獎","3-1","L-13","7"],
+            ["273","陳方月琴","35","新竹縣新豐鄉戶政事務所(領隊)","榮譽獎","3-2","L-15","7"],
+            ["274","陳奕辰","36","新竹縣政府消防局","領隊","X","K-15","7"],
+            ["275","陳靜妹","36","新竹縣政府消防局芎林婦宣分隊","銀級獎","3-3","K-16","7"],
+            ["276","劉李燕梅","36","新竹縣政府消防局芎林婦宣分隊","銀級獎","3-3","K-17","7"],
+            ["277","黃貴蓮","36","新竹縣政府消防局芎林婦宣分隊","銅級獎","3-3","K-18","7"],
+            ["278","何鳳琴","36","新竹縣政府消防局芎林婦宣分隊","銅級獎","3-3","K-19","7"],
+            ["279","余月宴","36","新竹縣政府消防局芎林婦宣分隊","銅級獎","3-3","K-20","7"],
+            ["280","葉瑞玲","36","新竹縣政府消防局芎林婦宣分隊","銅級獎","3-3","K-21","7"],
+            ["281","謝秋蓉","36","新竹縣政府消防局芎林婦宣分隊","榮譽獎","3-3","K-22","7"],
+            ["282","魏桂枝","36","新竹縣政府消防局芎林婦宣分隊","榮譽獎","3-3","K-23","7"],
+            ["283","官秀娘","36","新竹縣政府消防局芎林婦宣分隊","榮譽獎","3-3","K-24","7"],
+            ["284","徐竹妹","36","新竹縣政府消防局芎林婦宣分隊","榮譽獎","3-3","K-25","7"],
+            ["285","徐秀菊","36","新竹縣政府消防局芎林婦宣分隊","榮譽獎","3-3","K-26","7"],
+            ["286","彭靜芝","37","新竹縣政府消防局新工婦宣分隊","銅級獎","3-4","K-27","7"],
+            ["287","黃秋雲","37","新竹縣政府消防局新工婦宣分隊","銅級獎","3-4","K-28","7"],
+            ["288","曾美玲","38","新竹縣政府消防局峨眉婦宣分隊","銀級獎","3-5","L-16","7"],
+            ["289","黃瑞惠","38","新竹縣政府消防局峨眉婦宣分隊","銅級獎","3-5","L-17","7"],
+            ["290","魏玉美","38","新竹縣政府消防局峨眉婦宣分隊","銅級獎","3-5","L-18","7"],
+            ["291","黃素珍","38","新竹縣政府消防局峨眉婦宣分隊","榮譽獎","3-5","L-19","7"],
+            ["292","彭春琪","38","新竹縣政府消防局峨眉婦宣分隊","榮譽獎","3-5","L-20","7"],
+            ["293","徐秀景","38","新竹縣政府消防局峨眉婦宣分隊","榮譽獎","3-5","L-21","7"],
+            ["294","黎秀琴","38","新竹縣政府消防局峨眉婦宣分隊","榮譽獎","3-5","L-22","7"],
+            ["295","邱德寶","39","新竹縣政府消防局新埔婦宣分隊","銅級獎","3-6","L-23","7"],
+            ["296","張桂娥","39","新竹縣政府消防局新埔婦宣分隊","銅級獎","3-6","L-24","7"],
+            ["297","郭梓羚","39","新竹縣政府消防局新埔婦宣分隊","銅級獎","3-6","L-25","7"],
+            ["298","古秋桂","39","新竹縣政府消防局新埔婦宣分隊","榮譽獎","3-6","L-26","7"],
+            ["299","邱瑞銀","39","新竹縣政府消防局新埔婦宣分隊","榮譽獎","3-6","L-27","7"],
+            ["300","鄧春媛","39","新竹縣政府消防局新埔婦宣分隊","榮譽獎","3-6","L-28","7"],
+            ["301","劉碧華","40","新竹縣竹北市竹義社區發展協會","領隊","X","A-29","7"],
+            ["302","陳憶潔","40","新竹縣竹北市竹義社區發展協會","銀級獎","3-7","A-30","7"],
+            ["303","張淑惠","40","新竹縣竹北市竹義社區發展協會","榮譽獎","3-7","A-31","7"],
+            ["304","蘇憶","41","社團法人新竹縣馨圓健康照護教育與服務協會","領隊","X","A-32","7"],
+            ["305","彭昭泰","41","社團法人新竹縣馨圓健康照護教育與服務協會","銀級獎","3-8","A-33","7"],
+            ["306","蘇明宏","41","社團法人新竹縣馨圓健康照護教育與服務協會","銀級獎","3-8","A-34","7"],
+            ["307","余麗芝","41","社團法人新竹縣馨圓健康照護教育與服務協會","銅級獎","3-8","A-35","7"],
+            ["308","余亮螢","42","新竹縣竹東鎮番社子文化協會(領隊)","銀級獎","3-9","B-29","7"],
+            ["309","賴送能","42","新竹縣竹東鎮番社子文化協會","銅級獎","3-9","B-30","7"],
+            ["310","彭雅玲","42","新竹縣竹東鎮番社子文化協會","銅級獎","3-9","B-31","7"],
+            ["311","陳楷鈞","42","新竹縣竹東鎮番社子文化協會","銅級獎","3-9","B-32","7"],
+            ["312","鄒瑞珍","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-33","7"],
+            ["313","宋翎","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-34","7"],
+            ["314","莊力珠","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-35","7"],
+            ["315","劉秀珠","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-36","7"],
+            ["316","范寶珍","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-37","7"],
+            ["317","許淑芳","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-38","7"],
+            ["318","王華絹","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-39","7"],
+            ["319","黃秋鳳","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-40","7"],
+            ["320","周榮秀","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-41","7"],
+            ["321","劉國強","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","B-42","7"],
+            ["322","劉雙喜","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-36","7"],
+            ["323","林章勇","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-37","7"],
+            ["324","彭善全","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-38","7"],
+            ["325","范春香","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-39","7"],
+            ["326","彭呂春對","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-40","7"],
+            ["327","朱秀琴","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-41","7"],
+            ["328","吳銀珍","42","新竹縣竹東鎮番社子文化協會","榮譽獎","3-9","A-42","7"],
+            ["329","吳彥華","43","新竹縣政府高齡長照處長青學苑","領隊","X","C-29","7"],
+            ["330","涂春香","43","新竹縣政府高齡長照處長青學苑","銀級獎","3-10","C-30","7"],
+            ["331","黃增威","44","社團法人台灣築心全人生命教育關懷協會","領隊","X","J-28","8"],
+            ["332","劉月湖","44","社團法人台灣築心全人生命教育關懷協會","銀級獎","3-11","J-27","8"],
+            ["333","林妙宜","44","社團法人台灣築心全人生命教育關懷協會","銀級獎","3-11","J-26","8"],
+            ["334","鄭陳義","44","社團法人台灣築心全人生命教育關懷協會","銅級獎","3-11","J-25","8"],
+            ["335","胡蘭英","44","社團法人台灣築心全人生命教育關懷協會","榮譽獎","3-11","J-24","8"],
+            ["336","任蕙蘭","45","新竹縣新埔鎮內立社區發展協會","領隊","X","C-42","8"],
+            ["337","劉張火妹","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-41","8"],
+            ["338","吳余冬梅","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-40","8"],
+            ["339","彭淑娟","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-39","8"],
+            ["340","魏雲妹","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-38","8"],
+            ["341","劉冠吟","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-37","8"],
+            ["342","范曾梅蘭","45","新竹縣新埔鎮內立社區發展協會","銀級獎","3-12","C-36","8"],
+            ["343","林鳳燕","45","新竹縣新埔鎮內立社區發展協會","銅級獎","3-12","C-35","8"],
+            ["344","林灶英","45","新竹縣新埔鎮內立社區發展協會","銅級獎","3-12","C-34","8"],
+            ["345","梁月嬌","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","C-33","8"],
+            ["346","温文正","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","C-32","8"],
+            ["347","彭南星","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","C-31","8"],
+            ["348","黃秀琴","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-42","8"],
+            ["349","馮林尾妹","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-41","8"],
+            ["350","黃鳳珍","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-40","8"],
+            ["351","吳金棋","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-39","8"],
+            ["352","龍金英","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-38","8"],
+            ["353","林美珠","45","新竹縣新埔鎮內立社區發展協會","榮譽獎","3-12","D-37","8"],
+            ["354","劉雯文","46","衛生福利部社會及家庭署寧園安養院","領隊","X","F-29","8"],
+            ["355","張寶鈺","46","衛生福利部社會及家庭署寧園安養院","榮譽獎","3-13","F-30","8"],
+            ["356","劉春梅","47","新竹縣竹北社區大學","領隊","X","F-31","8"],
+            ["357","劉瑞英","47","新竹縣竹北社區大學","銅級獎","3-14","F-32","8"],
+            ["358","黃聖惠","47","新竹縣竹北社區大學","榮譽獎","3-14","F-33","8"],
+            ["359","邱月琴","47","新竹縣竹北社區大學","榮譽獎","3-14","F-34","8"],
+            ["360","陳坦變","48","新竹縣新埔鎮上寮社區發展協會","領隊","X","D-29","8"],
+            ["361","林賢雙","48","新竹縣新埔鎮上寮社區發展協會","銀級獎","3-15","D-30","8"],
+            ["362","黃兆鈞","48","新竹縣新埔鎮上寮社區發展協會","銀級獎","3-15","D-31","8"],
+            ["363","蔡宛紋","48","新竹縣新埔鎮上寮社區發展協會","銀級獎","3-15","D-32","8"],
+            ["364","詹曾錦玉","48","新竹縣新埔鎮上寮社區發展協會","銅級獎","3-15","D-33","8"],
+            ["365","劉呂瑞嬌","48","新竹縣新埔鎮上寮社區發展協會","銅級獎","3-15","D-34","8"],
+            ["366","涂有龍","48","新竹縣新埔鎮上寮社區發展協會","銅級獎","3-15","D-35","8"],
+            ["367","林秀球","48","新竹縣新埔鎮上寮社區發展協會","銅級獎","3-15","D-36","8"],
+            ["368","范香蘭","48","新竹縣新埔鎮上寮社區發展協會","銅級獎","3-15","E-29","8"],
+            ["369","范光懋","48","新竹縣新埔鎮上寮社區發展協會","榮譽獎","3-15","E-30","8"],
+            ["370","劉進燻","48","新竹縣新埔鎮上寮社區發展協會","榮譽獎","3-15","E-31","8"],
+            ["371","呂美珠","49","新竹縣竹北市中興社區發展協會(領隊)","銀級獎","3-16","F-42","8"],
+            ["372","姜木水","49","新竹縣竹北市中興社區發展協會","銅級獎","3-16","F-41","8"],
+            ["373","温兆和","49","新竹縣竹北市中興社區發展協會","榮譽獎","3-16","F-40","8"],
+            ["374","黃鳳珠","49","新竹縣竹北市中興社區發展協會","榮譽獎","3-16","F-39","8"],
+            ["375","周德雨","50","新竹縣湖口鄉長嶺社區發展協會","領隊","X","A-8","8"],
+            ["376","李春英","50","新竹縣湖口鄉長嶺社區發展協會","銀級獎","3-17","F-38","8"],
+            ["377","曾月英","50","新竹縣湖口鄉長嶺社區發展協會","銅級獎","3-17","F-37","8"],
+            ["378","盧雲美","50","新竹縣湖口鄉長嶺社區發展協會","銅級獎","3-17","F-36","8"],
+            ["379","馮佩旋","50","新竹縣湖口鄉長嶺社區發展協會","榮譽獎","3-17","F-35","8"],
+            ["380","戴玉英","51","新竹縣湖口鄉鳳凰社區發展協會","領隊","X","B-13","8"],
+            ["381","何松燕","51","新竹縣湖口鄉鳳凰社區發展協會","銅級獎","3-18","G-28","8"],
+            ["382","徐惠春","51","新竹縣湖口鄉鳳凰社區發展協會","銅級獎","3-18","G-27","8"],
+            ["383","林瑞玉","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-26","8"],
+            ["384","羅雅楹","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-25","8"],
+            ["385","吳采宴","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-24","8"],
+            ["386","廖順英","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-23","8"],
+            ["387","邱桂春","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-29","8"],
+            ["388","葉秋菊","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-30","8"],
+            ["389","卓美吟","51","新竹縣湖口鄉鳳凰社區發展協會","榮譽獎","3-18","G-31","8"],
+            ["390","吳佩玲","52","新竹縣湖口鄉公所","領隊","X","G-32","8"],
+            ["391","莊春福","52","新竹縣湖口鄉公所","銅級獎","3-19","G-33","8"],
+            ["392","范雯鈴","53","新竹縣桐花藝術教育協會(領隊)","榮譽獎","3-20","G-34","8"],
+            ["393","温清飲","53","新竹縣桐花藝術教育協會","榮譽獎","3-20","G-35","8"],
+            ["394","吳金枝","54","新竹縣竹北市大眉社區發展協會","領隊","X","G-36","8"],
+            ["395","陳敏雄","54","新竹縣竹北市大眉社區發展協會","銀級獎","3-21","G-37","8"],
+            ["396","楊麗香","54","新竹縣竹北市大眉社區發展協會","銅級獎","3-21","G-38","8"],
+            ["397","羅先慈","54","新竹縣竹北市大眉社區發展協會","銅級獎","3-21","G-39","8"],
+            ["398","楊喬茵","54","新竹縣竹北市大眉社區發展協會","榮譽獎","3-21","G-40","8"],
+            ["399","史芬蘭","54","新竹縣竹北市大眉社區發展協會","榮譽獎","3-21","G-41","8"],
+            ["400","張廖元閔","55","新竹縣寶山鄉公所","領隊","X","H-29","9"],
+            ["401","蔡鳳蘭","55","新竹縣寶山鄉公所","銅級獎","3-22","H-30","9"],
+            ["402","李麗霞","55","新竹縣寶山鄉公所","銅級獎(不會到)","3-22","H-31","9","ABSENT","","名冊註記：不會到"],
+            ["403","朱雪惠","55","新竹縣寶山鄉公所","榮譽獎","3-22","H-32","9"],
+            ["404","徐凡鈞","56","新竹縣好厝邊全人關懷協會","領隊","X","E-42","9"],
+            ["405","林以涓","56","新竹縣好厝邊全人關懷協會","銀級獎","3-23","E-41","9"],
+            ["406","黃靜韻","56","新竹縣好厝邊全人關懷協會","銀級獎","3-23","E-40","9"],
+            ["407","范娟娟","56","新竹縣好厝邊全人關懷協會","銅級獎","3-23","E-39","9"],
+            ["408","徐志勝","56","新竹縣好厝邊全人關懷協會","銅級獎","3-23","E-38","9"],
+            ["409","史秀純","56","新竹縣好厝邊全人關懷協會","銅級獎","3-23","E-37","9"],
+            ["410","陳來圓","56","新竹縣好厝邊全人關懷協會","銅級獎","3-23","E-36","9"],
+            ["411","張琼琴","56","新竹縣好厝邊全人關懷協會","銅級獎","3-23","E-35","9"],
+            ["412","林翠玲","56","新竹縣好厝邊全人關懷協會","榮譽獎","3-23","E-34","9"],
+            ["413","黃一正","56","新竹縣好厝邊全人關懷協會","榮譽獎","3-23","E-33","9"],
+            ["414","譚明華","56","新竹縣好厝邊全人關懷協會","榮譽獎","3-23","E-32","9"],
+            ["415","沈朋源","57","新竹縣家祿儲蓄互助社","領隊","X","B-6","9"],
+            ["416","范秀春","57","新竹縣家祿儲蓄互助社","榮譽獎","3-24","H-33","9"],
+            ["417","劉軒瑜","58","社團法人台灣喆城永續輔導管理顧問公益協會(領隊)","榮譽獎","3-25","I-29","9"],
+            ["418","蕭博薰","58","社團法人台灣喆城永續輔導管理顧問公益協會","銅級獎","3-25","I-30","9"],
+            ["419","彭文姿","58","社團法人台灣喆城永續輔導管理顧問公益協會","銅級獎","3-25","I-31","9"],
+            ["420","鄭華龍","58","社團法人台灣喆城永續輔導管理顧問公益協會","銅級獎","3-25","I-32","9"],
+            ["421","何姿妤","58","社團法人台灣喆城永續輔導管理顧問公益協會","銅級獎","3-25","I-33","9"],
+            ["422","葉佳綾","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-34","9"],
+            ["423","葉佳綺","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-35","9"],
+            ["424","陳菁惠","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-36","9"],
+            ["425","劉高阿素","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-37","9"],
+            ["426","黃錦淀","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-38","9"],
+            ["427","李彩珍","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-39","9"],
+            ["428","黃久玲","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-40","9"],
+            ["429","黃子懿","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-41","9"],
+            ["430","黃久驊","58","社團法人台灣喆城永續輔導管理顧問公益協會","榮譽獎","3-25","I-42","9"],
+            ["431","鍾招露","59","新竹縣新埔鎮新北社區發展協會","領隊","X","H-41","9"],
+            ["432","羅張二妹","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-40","9"],
+            ["433","魏寶琴","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-39","9"],
+            ["434","彭宣雅","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-38","9"],
+            ["435","鍾楊幸湖","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-37","9"],
+            ["436","鍾蘭香","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-36","9"],
+            ["437","彭琦雯","59","新竹縣新埔鎮新北社區發展協會","銀級獎","3-26","H-35","9"],
+            ["438","徐玉花","59","新竹縣新埔鎮新北社區發展協會","銅級獎","3-26","H-34","9"],
+            ["439","余冠宏","60","新竹縣新豐鄉中崙社區發展協會(領隊)","銀級獎","3-27","K-29","9"],
+            ["440","徐傑城","60","新竹縣新豐鄉中崙社區發展協會","銀級獎","3-27","K-30","9"],
+            ["441","周仕漢","60","新竹縣新豐鄉中崙社區發展協會","銀級獎","3-27","K-31","9"],
+            ["442","謝秀菊","60","新竹縣新豐鄉中崙社區發展協會","銀級獎","3-27","K-32","9"],
+            ["443","陳英華","60","新竹縣新豐鄉中崙社區發展協會","銅級獎","3-27","K-33","9"],
+            ["444","徐傑寶","60","新竹縣新豐鄉中崙社區發展協會","銅級獎","3-27","K-34","9"],
+            ["445","黃郁生","60","新竹縣新豐鄉中崙社區發展協會","銅級獎","3-27","K-35","9"],
+            ["446","高中","60","新竹縣新豐鄉中崙社區發展協會","銅級獎","3-27","K-36","9"],
+            ["447","賴瑞月","60","新竹縣新豐鄉中崙社區發展協會","銅級獎","3-27","K-37","9"],
+            ["448","張素勛","60","新竹縣新豐鄉中崙社區發展協會","榮譽獎","3-27","K-38","9"],
+            ["449","羅堂聘","60","新竹縣新豐鄉中崙社區發展協會","榮譽獎","3-27","K-39","9"],
+            ["450","傅春蓮","60","新竹縣新豐鄉中崙社區發展協會","榮譽獎","3-27","L-29","9"],
+            ["451","吳秀玉","60","新竹縣新豐鄉中崙社區發展協會","榮譽獎","3-27","L-30","9"],
+            ["452","范揚清","61","社團法人新竹縣社區大學發展協會","領隊","X","I-5","9"],
+            ["453","郭明龍","61","社團法人新竹縣社區大學發展協會","銀級獎","3-28","G-42","9"],
+            ["454","劉琇竹","62","新竹縣新埔鎮下寮社區發展協會","領隊","X","J-29","9"],
+            ["455","王萬傳","62","新竹縣新埔鎮下寮社區發展協會","榮譽獎","3-29","J-30","9"],
+            ["456","林双福","62","新竹縣新埔鎮下寮社區發展協會","榮譽獎","3-29","J-31","9"],
+            ["457","余秀蓮","63","社團法人新竹縣肢體障礙協會(領隊)","銅級獎","3-30","J-32","9"],
+            ["458","詹天燿","63","社團法人新竹縣肢體障礙協會","銅級獎","3-30","J-33","9"],
+            ["459","邱明貴","63","社團法人新竹縣肢體障礙協會","銅級獎","3-30","J-34","9"],
+            ["460","林增炎","63","社團法人新竹縣肢體障礙協會","銅級獎","3-30","J-35","9"],
+            ["461","余佳錚","63","社團法人新竹縣肢體障礙協會","銅級獎","3-30","J-36","9"],
+            ["462","余秀菊","63","社團法人新竹縣肢體障礙協會","榮譽獎","3-30","J-37","9"],
+            ["463","宋睦喜","63","社團法人新竹縣肢體障礙協會","榮譽獎","3-30","J-38","9"],
+            ["464","李國鋒","64","新竹縣湖口鄉老人會","領隊","X","B-1","9"],
+            ["465","范譯云","64","新竹縣湖口鄉老人會","銅級獎","3-31","J-39","9"],
+            ["466","甘綢妹","64","新竹縣湖口鄉老人會","銅級獎","3-31","J-40","9"],
+            ["467","彭双發","64","新竹縣湖口鄉老人會","銅級獎","3-31","J-41","9"],
+            ["468","王秋云","64","新竹縣湖口鄉老人會","銅級獎(已領金級獎/不重複上台)","X","E-4","9","","","已領金級獎(#59)，不上台"],
+            ["469","張貴清","64","新竹縣湖口鄉老人會","銅級獎(已領金級獎/不重複上台)","X","E-5","9","","","已領金級獎(#60)，不上台"],
+            ["470","陳姵錡","64","新竹縣湖口鄉老人會","榮譽獎","3-31","J-42","9"],
+            ["471","羅秋妹","64","新竹縣湖口鄉老人會","榮譽獎","3-31","K-40","9"],
+            ["472","林梅蘭","64","新竹縣湖口鄉老人會","榮譽獎","3-31","K-41","9"],
+            ["473","林秋菊","64","新竹縣湖口鄉老人會","榮譽獎","3-31","K-42","9"]
+        ];
+
+        // ==========================================
+        // 跨獎項上台與重複人員規則自動套用（確保歷史雲端資料也同步遵守）
+        // 1. 同人判定鍵：一般以姓名為準；「陳瑞珍」為同名同姓不同人，依單位區分（新工派出所 vs 竹北分局本部）
+        // 2. 金級獎(1-3)與衛福部金質獎(1-4)重複需重複上台
+        // 3. 已領金級/金質獎者，不再於銀/銅/榮譽梯次上台（設為 X）
+        // 4. 銀/銅/榮譽獎重複者，僅計算一位上台（重複低階設為 X）
+        // ==========================================
+        function getPersonIdentityKey(rec) {
+            const name = (rec.name || "").trim();
+            if (name === "陳瑞珍") {
+                const cleanUnit = (rec.unit || "").replace(/\(領隊\)/g, "").trim();
+                return `陳瑞珍_${cleanUnit}`;
+            }
+            return name;
+        }
+
+        function enforceAwardStageRules(list) {
+            const goldWinners = new Set();
+            const lowerTierAwarded = new Set();
+
+            list.forEach(r => {
+                const personKey = getPersonIdentityKey(r);
+                const awardStr = (r.award || "").trim();
+                if (awardStr.includes("金級獎") || awardStr.includes("金質獎")) {
+                    goldWinners.add(personKey);
+                }
+            });
+
+            list.forEach(r => {
+                const personKey = getPersonIdentityKey(r);
+                const awardStr = (r.award || "").trim();
+                const isLowerTier = awardStr.includes("銀級獎") || awardStr.includes("銅級獎") || awardStr.includes("榮譽獎");
+                if (!isLowerTier) return;
+
+                if (goldWinners.has(personKey)) {
+                    r.batch = "X";
+                    if (!r.award.includes("不重複上台")) {
+                        r.award = r.award.replace(/\(已領金級獎\)/g, "") + "(已領金級獎/不重複上台)";
+                    }
+                    if (!r.note) r.note = "已領金級/金質獎，不上台";
+                } else if (lowerTierAwarded.has(personKey)) {
+                    r.batch = "X";
+                    if (!r.award.includes("不重複上台")) {
+                        r.award = r.award + "(銀銅榮譽重複/僅計算一位上台)";
+                    }
+                    if (!r.note) r.note = "銀銅榮譽重複，不上台";
                 } else {
-                    // 接收雲端最新狀態並更新畫面
-<!-- ... existing code ... -->
-        function confirmResetCloudData() {
-            if (confirm("⚠️ 確定要將雲端資料庫重置回「V6 完整正式名冊（473筆）」嗎？\n（所有工作人員手機上的報到紀錄都會同步更新為最新 V6 名冊）")) {
-                records = buildRecordsFromRaw(RAW_PAGES_3_TO_8);
-                vips = JSON.parse(JSON.stringify(DEFAULT_VIPS));
-                broadcastMsg = "已重置為《報到桌配置》V6 完整名冊資料（共 473 筆）";
+                    lowerTierAwarded.add(personKey);
+                }
+            });
+            return list;
+        }
+
+        function buildDefaultRecords() {
+            const rawList = PDF_RAW_ROSTER.map((item, idx) => ({
+                id: "rec_pdf_" + item[0] + "_" + idx,
+                docNo: item[0],
+                name: item[1],
+                leaderSeq: item[2],
+                unit: item[3],
+                award: item[4],
+                batch: item[5],
+                seat: item[6],
+                desk: item[7],
+                status: item[8] || "PENDING",
+                time: item[9] || "",
+                note: item[10] || "",
+                proxy: "",
+                linedUp: false
+            }));
+            return enforceAwardStageRules(rawList);
+        }
+
+        // ==========================================
+        // 2. Firebase 雲端即時資料庫設定
+        // ==========================================
+        const firebaseConfig = {
+            databaseURL: "https://hsinchu-volunteer-115-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const dbRef = db.ref("volunteer_checkin_115_v1");
+
+        const DEFAULT_VIPS = [
+            { id: "vip_1", title: "新竹縣政府 縣長", name: "楊文科", task: "頒發獎項與致詞", note: "貴賓室接待引導", status: "PENDING", proxy: "", announced: false, time: "" },
+            { id: "vip_2", title: "新竹縣議會 議長", name: "張鎮榮", task: "頒發獎項", note: "第一排主桌入座", status: "PENDING", proxy: "", announced: false, time: "" }
+        ];
+
+        // ==========================================
+        // 3. 應用程式狀態變數
+        // ==========================================
+        let records = buildDefaultRecords();
+        let vips = JSON.parse(JSON.stringify(DEFAULT_VIPS));
+        let completedBatches = {};
+        let broadcastMsg = "已載入完整 " + records.length + " 筆受獎名冊（含同名連動與跨獎項上台規則）！";
+        let currentTab = "checkin";
+        let currentDesk = "ALL";
+        let currentStatusFilter = "ALL";
+        let currentProxyTarget = null;
+
+        // ==========================================
+        // 4. 啟動與 Firebase 雙向即時同步
+        // ==========================================
+        function initApp() {
+            populateFilterDropdowns();
+            refreshAllViews();
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            dbRef.on("value", (snapshot) => {
+                const badge = document.getElementById('cloud-status-badge');
+                if (badge) {
+                    badge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> 雲端即時同步中`;
+                }
+
+                const val = snapshot.val();
+                if (val && Array.isArray(val.records) && val.records.length > 0) {
+                    let loaded = val.records.map(r => ({
+                        status: "PENDING",
+                        time: "",
+                        note: "",
+                        proxy: "",
+                        leaderSeq: "",
+                        linedUp: false,
+                        ...r
+                    }));
+
+                    // 若雲端尚未包含 #164（舊版 472 筆），自動補入完整 473 筆
+                    if (loaded.length === 472 && !loaded.some(r => String(r.docNo) === "164")) {
+                        const item164 = PDF_RAW_ROSTER.find(x => x[0] === "164");
+                        if (item164) {
+                            const idx163 = loaded.findIndex(r => String(r.docNo) === "163");
+                            const rec164 = {
+                                id: "rec_pdf_164_patch",
+                                docNo: item164[0],
+                                name: item164[1],
+                                leaderSeq: item164[2],
+                                unit: item164[3],
+                                award: item164[4],
+                                batch: item164[5],
+                                seat: item164[6],
+                                desk: item164[7],
+                                status: "PENDING",
+                                time: "",
+                                note: "",
+                                proxy: "",
+                                linedUp: false
+                            };
+                            loaded.splice(idx163 >= 0 ? idx163 + 1 : 163, 0, rec164);
+                        }
+                    }
+
+                    records = enforceAwardStageRules(loaded);
+                    vips = Array.isArray(val.vips) ? val.vips.map(v => ({
+                        status: "PENDING",
+                        proxy: "",
+                        announced: false,
+                        time: "",
+                        note: "",
+                        task: "",
+                        ...v
+                    })) : JSON.parse(JSON.stringify(DEFAULT_VIPS));
+                    completedBatches = (val.completedBatches && typeof val.completedBatches === 'object') ? val.completedBatches : {};
+
+                    if (val.broadcastMsg) {
+                        broadcastMsg = val.broadcastMsg;
+                        document.getElementById('latest-broadcast').textContent = broadcastMsg;
+                    }
+                    populateFilterDropdowns();
+                    refreshAllViews();
+                } else {
+                    syncToCloud("📥 已自動初始化完整 " + records.length + " 筆受獎名冊");
+                }
+            }, () => {
+                const badge = document.getElementById('cloud-status-badge');
+                if (badge) {
+                    badge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/40";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> 離線模式`;
+                }
+            });
+        }
+
+        function syncToCloud(newBroadcast) {
+            if (newBroadcast) {
+                broadcastMsg = newBroadcast;
                 document.getElementById('latest-broadcast').textContent = broadcastMsg;
-                pushFullDataToCloud(broadcastMsg);
-                populateFilterDropdowns();
-                refreshAllViews();
-                showToast("已更新雲端資料庫為 V6 最新名冊（473筆）並同步至全場手機！");
+            }
+            refreshAllViews();
+            dbRef.set({
+                records: records,
+                vips: vips,
+                completedBatches: completedBatches,
+                broadcastMsg: broadcastMsg,
+                updatedAt: Date.now()
+            });
+        }
+
+        function updateClock() {
+            const el = document.getElementById('clock-display');
+            if (!el) return;
+            const now = new Date();
+            el.textContent = now.toTimeString().slice(0, 8);
+        }
+
+        function getCurrentHHMM() {
+            const now = new Date();
+            return String(now.getHours()).padStart(2, '0') + ":" + String(now.getMinutes()).padStart(2, '0');
+        }
+
+        // ==========================================
+        // 5. 導覽分頁與桌次切換
+        // ==========================================
+        function switchTab(tabName) {
+            currentTab = tabName;
+            ['checkin', 'marshal', 'award', 'mc', 'vip'].forEach(t => {
+                const view = document.getElementById('view-' + t);
+                const btn = document.getElementById('tab-' + t);
+                if (t === tabName) {
+                    view.classList.remove('hidden');
+                    btn.classList.add('tab-active');
+                } else {
+                    view.classList.add('hidden');
+                    btn.classList.remove('tab-active');
+                }
+            });
+            refreshAllViews();
+        }
+
+        function selectDesk(desk) {
+            currentDesk = String(desk);
+            document.querySelectorAll('.desk-btn').forEach(btn => {
+                btn.classList.remove('desk-btn-active');
+            });
+            const activeBtn = document.getElementById('desk-btn-' + currentDesk);
+            if (activeBtn) {
+                activeBtn.classList.add('desk-btn-active');
+            }
+            renderCheckinView();
+        }
+
+        function setStatusFilter(status) {
+            currentStatusFilter = status;
+            const styles = {
+                ALL: { id: 'btn-f-all', active: 'bg-slate-800 text-white shadow-sm', inactive: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
+                PENDING: { id: 'btn-f-pending', active: 'bg-amber-600 text-white shadow-sm', inactive: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
+                CHECKED: { id: 'btn-f-checked', active: 'bg-emerald-600 text-white shadow-sm', inactive: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+                ABSENT: { id: 'btn-f-absent', active: 'bg-red-600 text-white shadow-sm', inactive: 'bg-red-50 text-red-700 hover:bg-red-100' }
+            };
+            Object.keys(styles).forEach(key => {
+                const el = document.getElementById(styles[key].id);
+                if (!el) return;
+                el.className = `flex-1 py-2 px-2 rounded-lg text-xs font-black transition ${key === status ? styles[key].active : styles[key].inactive}`;
+            });
+            renderCheckinView();
+        }
+
+        function getSortedStageBatches() {
+            return [...new Set(records.map(r => r.batch).filter(b => b && b !== 'X'))].sort((a, b) => {
+                const [a1, a2] = a.split('-').map(Number);
+                const [b1, b2] = b.split('-').map(Number);
+                return (a1 - b1) || ((a2 || 0) - (b2 || 0));
+            });
+        }
+
+        function getBatchDisplayName(batch) {
+            const list = records.filter(r => r.batch === batch);
+            if (list.length === 0) return "";
+            if (batch.startsWith("1-")) {
+                const awards = [...new Set(list.map(r => (r.award || "").replace(/\(.*\)/g, "").trim()).filter(Boolean))];
+                return awards.join("、");
+            }
+            const units = [...new Set(list.map(r => (r.unit || "").replace(/\(領隊\)/g, "").trim()).filter(Boolean))];
+            if (units.length === 1) return units[0];
+            if (units.length <= 2) return units.join("、");
+            return `${units[0]} 等 ${units.length} 單位`;
+        }
+
+        function populateFilterDropdowns() {
+            const batches = getSortedStageBatches();
+            const stageBatches = batches.length > 0 ? batches : ["1-1"];
+
+            const fBatch = document.getElementById('filter-batch');
+            const mBatch = document.getElementById('marshal-batch-select');
+            const mcBatch = document.getElementById('mc-batch-select');
+
+            if (fBatch) {
+                const prev = fBatch.value;
+                fBatch.innerHTML = `<option value="ALL">所有受獎組別 (全梯次)</option>` +
+                    batches.map(b => {
+                        const title = getBatchDisplayName(b);
+                        return `<option value="${b}">梯次 ${b}${title ? '｜' + title : ''}</option>`;
+                    }).join('') +
+                    `<option value="X">純陪同領隊 / 不重複上台項目 (X)</option>`;
+                if ([...fBatch.options].some(o => o.value === prev)) fBatch.value = prev;
+            }
+            if (mBatch) {
+                const prev = mBatch.value;
+                mBatch.innerHTML = `<option value="ALL">顯示全部梯次 (全場總覽)</option>` +
+                    stageBatches.map(b => {
+                        const title = getBatchDisplayName(b);
+                        const doneTag = completedBatches[b] ? ' [✅已整隊]' : '';
+                        return `<option value="${b}">第 ${b} 梯次${title ? '｜' + title : ''}${doneTag}</option>`;
+                    }).join('');
+                if ([...mBatch.options].some(o => o.value === prev)) mBatch.value = prev;
+            }
+            if (mcBatch) {
+                const prev = mcBatch.value;
+                mcBatch.innerHTML = `<option value="ALL">顯示全部上台梯次</option>` +
+                    stageBatches.map(b => {
+                        const title = getBatchDisplayName(b);
+                        const doneTag = completedBatches[b] ? ' [✅已整隊]' : '';
+                        return `<option value="${b}">僅看第 ${b} 梯次${title ? '｜' + title : ''}${doneTag}</option>`;
+                    }).join('');
+                if ([...mcBatch.options].some(o => o.value === prev)) mcBatch.value = prev;
             }
         }
-<!-- ... existing code ... -->
+
+        function refreshAllViews() {
+            updateStats();
+            renderCheckinView();
+            renderMarshalView();
+            renderAwardView();
+            renderMCView();
+            renderVIPView();
+        }
+
+        function updateStats() {
+            const total = records.length;
+            const checked = records.filter(r => r.status === 'CHECKED').length;
+            const absent = records.filter(r => r.status === 'ABSENT').length;
+            const pending = total - checked - absent;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-checked').textContent = checked;
+            document.getElementById('stat-absent').textContent = absent;
+            document.getElementById('stat-pending').textContent = pending;
+
+            for (let d = 1; d <= 9; d++) {
+                const deskRecs = records.filter(r => r.desk === String(d));
+                const deskChecked = deskRecs.filter(r => r.status === 'CHECKED').length;
+                const el = document.getElementById(`desk-stat-${d}`);
+                if (el) el.textContent = `${deskChecked}/${deskRecs.length}`;
+            }
+
+            const pullCount = records.filter(r => r.status === 'ABSENT' && r.batch !== 'X').length;
+            const badge = document.getElementById('badge-pull-cert');
+            if (pullCount > 0) {
+                badge.textContent = pullCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // 6. 報到組主控台渲染與互動 (含同名連動、排除陳瑞珍、一鍵可恢復)
+        // ==========================================
+        function getDuplicatePersonsMap() {
+            const map = {};
+            records.forEach(r => {
+                const personKey = getPersonIdentityKey(r);
+                if (!personKey) return;
+                if (!map[personKey]) map[personKey] = [];
+                map[personKey].push(r);
+            });
+            return map;
+        }
+
+        // 嚴格限定：只有「貴賓（貴賓動態牆）」、「標竿志工」、「評鑑」、「支援團隊」、「表演團體」才顯示改派代表按鈕
+        function supportsProxy(rec) {
+            if (!rec || rec.batch === 'X') return false;
+            const award = (rec.award || "").trim();
+            const seq = (rec.leaderSeq || "").trim();
+            const isBenchmark = award.includes("標竿") || seq.startsWith("標竿");
+            const isEval = award.includes("評鑑") || seq.startsWith("評鑑");
+            const isSupport = award.includes("支援團隊") || seq.startsWith("支援");
+            const isPerf = award.includes("表演團體") || award.includes("表演團隊") || seq.startsWith("表演");
+            return isBenchmark || isEval || isSupport || isPerf;
+        }
+
+        function renderCheckinView() {
+            const container = document.getElementById('checkin-content-area');
+            const banner = document.getElementById('leader-mode-banner');
+            if (!container) return;
+
+            const kw = (document.getElementById('search-input')?.value || "").trim().toLowerCase();
+            const batchVal = document.getElementById('filter-batch')?.value || "ALL";
+            const dupMap = getDuplicatePersonsMap();
+
+            const filtered = records.filter(r => {
+                if (currentDesk !== 'ALL' && r.desk !== currentDesk) return false;
+                if (batchVal !== 'ALL' && r.batch !== batchVal) return false;
+                if (currentStatusFilter !== 'ALL' && r.status !== currentStatusFilter) return false;
+                if (kw) {
+                    const hay = `${r.docNo} ${r.name} ${r.unit} ${r.leaderSeq} ${r.seat} ${r.proxy} ${r.award}`.toLowerCase();
+                    if (!hay.includes(kw)) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                if (banner) banner.classList.add('hidden');
+                container.innerHTML = `<div class="bg-white rounded-xl p-10 text-center text-slate-400 border border-slate-200">
+                    <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                    <p class="font-bold">目前篩選條件下無符合的名單資料</p>
+                </div>`;
+                return;
+            }
+
+            const hasLeaderSeq = filtered.some(r => r.leaderSeq && r.leaderSeq.trim() !== '');
+            if (banner) {
+                if (hasLeaderSeq && ['5', '6', '7', '8', '9'].includes(currentDesk)) banner.classList.remove('hidden');
+                else banner.classList.add('hidden');
+            }
+
+            // 第 5~9 桌領隊報到區：依「領隊序號 + 服務單位」分組卡片呈現
+            if (hasLeaderSeq && ['5', '6', '7', '8', '9'].includes(currentDesk)) {
+                const groups = {};
+                filtered.forEach(r => {
+                    const cleanUnit = r.unit.replace(/\(領隊\)/g, '').trim();
+                    const key = `${r.leaderSeq || '99'}_${cleanUnit}`;
+                    if (!groups[key]) {
+                        groups[key] = { seq: r.leaderSeq, unit: cleanUnit, items: [] };
+                    }
+                    groups[key].items.push(r);
+                });
+
+                const sortedGroups = Object.values(groups).sort((a, b) => a.seq.localeCompare(b.seq, undefined, { numeric: true }));
+                container.innerHTML = `<div class="space-y-4">` + sortedGroups.map(g => {
+                    const allChecked = g.items.length > 0 && g.items.every(i => i.status === 'CHECKED');
+                    const checkedNum = g.items.filter(i => i.status === 'CHECKED').length;
+                    const safeUnit = g.unit.replace(/'/g, "\\'");
+                    const actionBtn = allChecked
+                        ? `<button onclick="undoUnitAllChecked('${g.seq}', '${safeUnit}')" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+                                ↩️ 取消全員出席（誤按恢復）
+                           </button>`
+                        : `<button onclick="markUnitAllChecked('${g.seq}', '${safeUnit}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+                                🎉 該單位全員出席（一鍵回報）
+                           </button>`;
+
+                    return `
+                    <div class="bg-white rounded-xl shadow-sm border ${allChecked ? 'border-emerald-400' : 'border-slate-200'} overflow-hidden">
+                        <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-emerald-700 text-white text-xs font-black px-2.5 py-1 rounded-lg">領隊序號 ${g.seq || '-'}</span>
+                                <h3 class="font-black text-slate-800 text-sm sm:text-base">${g.unit}</h3>
+                                <span class="text-xs font-bold text-slate-500">(${checkedNum}/${g.items.length} 人已到)</span>
+                            </div>
+                            ${actionBtn}
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                            ${g.items.map(r => renderRecordRowHTML(r, true, dupMap)).join('')}
+                        </div>
+                    </div>`;
+                }).join('') + `</div>`;
+                return;
+            }
+
+            // 一般表格呈現（第 1~4 桌與全部總覽）
+            container.innerHTML = `
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[820px]">
+                    <thead>
+                        <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 text-xs">
+                            <th class="py-2.5 px-3 w-28">桌次/編號</th>
+                            <th class="py-2.5 px-3 w-20">座位</th>
+                            <th class="py-2.5 px-3 w-52">姓名 / 同名自動連動提醒</th>
+                            <th class="py-2.5 px-3">服務單位</th>
+                            <th class="py-2.5 px-3 w-44">獎項 / 梯次</th>
+                            <th class="py-2.5 px-3 w-64">報到狀態操作</th>
+                            <th class="py-2.5 px-3 w-44">現場備註</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 text-sm">
+                        ${filtered.map(r => renderRecordRowHTML(r, false, dupMap)).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+        }
+
+        function renderRecordRowHTML(r, isCardMode, dupMap) {
+            const isChecked = r.status === 'CHECKED';
+            const isAbsent = r.status === 'ABSENT';
+            const rowBg = isAbsent ? 'bg-red-600 text-white' : (isChecked ? 'bg-emerald-50/70' : 'bg-white hover:bg-slate-50');
+            const proxyBtn = supportsProxy(r) ? `
+                <button onclick="openRecordProxyModal('${r.id}')" class="px-2 py-1.5 rounded-lg text-xs font-bold border ${isAbsent ? 'bg-white/20 text-white border-white/40' : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'} transition">
+                    🔄 改派代表
+                </button>` : '';
+
+            // 檢查同人連動狀態（已自動排除同名同姓不同人的陳瑞珍）
+            const personKey = getPersonIdentityKey(r);
+            const samePersonRecs = dupMap[personKey] || [];
+            let dupBadge = '';
+            if (samePersonRecs.length > 1) {
+                const otherRecs = samePersonRecs.filter(x => x.id !== r.id);
+                const otherChecked = otherRecs.some(x => x.status === 'CHECKED');
+                const otherInfo = otherRecs.map(x => `第${x.desk}桌#${x.docNo}`).join('、');
+                dupBadge = otherChecked
+                    ? `<div class="mt-0.5 text-[11px] font-black px-1.5 py-0.5 rounded bg-emerald-600 text-white inline-block">🔗 已連動報到 (${otherInfo})</div>`
+                    : `<div class="mt-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 inline-block">🔗 點選將連動 (${otherInfo})</div>`;
+            } else if ((r.name || "").trim() === "陳瑞珍") {
+                dupBadge = `<div class="mt-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 inline-block">👤 同名不同人(獨立計算)</div>`;
+            }
+
+            const nameDisplay = r.proxy
+                ? `<div class="font-black ${isAbsent ? 'text-white' : 'text-slate-800'} line-through opacity-75">${r.name}</div>
+                   <div class="text-xs font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded inline-block mt-0.5">👉 代表：${r.proxy}</div>
+                   ${dupBadge}`
+                : `<div class="font-black ${isAbsent ? 'text-white' : 'text-slate-800'}">${r.name}</div>
+                   ${dupBadge}`;
+
+            const isLeaderRole = r.batch === 'X' || (r.unit && r.unit.includes('(領隊)'));
+
+            if (isCardMode) {
+                return `
+                <div class="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 ${rowBg} transition">
+                    <div class="flex flex-wrap items-center gap-2.5 min-w-[240px]">
+                        <span class="font-mono text-xs font-bold px-2 py-0.5 rounded ${isAbsent ? 'bg-red-800 text-white' : 'bg-slate-100 text-slate-600'}">#${r.docNo}</span>
+                        <span class="font-mono text-xs font-bold ${isAbsent ? 'text-red-100' : 'text-indigo-600'}">${r.seat}</span>
+                        <div>${nameDisplay}</div>
+                        <span class="text-xs px-2 py-0.5 rounded-full font-bold ${r.batch === 'X' ? 'bg-amber-100 text-amber-800' : (isAbsent ? 'bg-red-800 text-white' : 'bg-blue-50 text-blue-700')}">
+                            ${r.batch === 'X' ? r.award : `${r.award} (${r.batch})`}
+                        </span>
+                        ${isLeaderRole && r.batch !== 'X' ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">兼領隊</span>' : ''}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="setRecordStatus('${r.id}', 'CHECKED')" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${isChecked ? 'bg-emerald-600 text-white shadow' : (isAbsent ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100')}">
+                            ✅ 出席 ${r.time ? r.time : ''}
+                        </button>
+                        <button onclick="setRecordStatus('${r.id}', 'ABSENT')" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${isAbsent ? 'bg-white text-red-700 shadow' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}">
+                            ❌ 未到/缺席
+                        </button>
+                        <input type="text" value="${(r.note || '').replace(/"/g, '&quot;')}" onchange="updateRecordNote('${r.id}', this.value)" placeholder="現場備註..." class="px-2.5 py-1 rounded-lg text-xs border ${isAbsent ? 'bg-red-700 text-white border-red-400 placeholder-red-200' : 'bg-white text-slate-700 border-slate-300'} w-40 focus:outline-none">
+                    </div>
+                </div>`;
+            }
+
+            return `
+            <tr class="${rowBg} transition">
+                <td class="py-2.5 px-3">
+                    <span class="inline-block text-[11px] font-black px-1.5 py-0.5 rounded ${isAbsent ? 'bg-red-800 text-white' : 'bg-slate-200 text-slate-700'}">第${r.desk}桌</span>
+                    ${r.leaderSeq ? `<span class="inline-block text-[10px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-800 ml-0.5">${r.leaderSeq}</span>` : ''}
+                    <div class="font-mono text-xs font-bold mt-0.5">#${r.docNo}</div>
+                </td>
+                <td class="py-2.5 px-3 font-mono text-xs font-bold ${isAbsent ? 'text-white' : 'text-indigo-700'}">${r.seat}</td>
+                <td class="py-2.5 px-3">${nameDisplay}</td>
+                <td class="py-2.5 px-3 text-xs ${isAbsent ? 'text-red-50' : 'text-slate-600'}">${r.unit}</td>
+                <td class="py-2.5 px-3">
+                    <div class="text-xs font-bold">${r.award}</div>
+                    <span class="inline-block text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${r.batch === 'X' ? 'bg-amber-100 text-amber-800' : (isAbsent ? 'bg-red-800 text-white' : 'bg-blue-50 text-blue-700')}">
+                        ${r.batch === 'X' ? '純陪同/不上台' : '梯次 ' + r.batch}
+                    </span>
+                </td>
+                <td class="py-2.5 px-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button onclick="setRecordStatus('${r.id}', 'CHECKED')" class="px-2.5 py-1.5 rounded-lg text-xs font-black transition ${isChecked ? 'bg-emerald-600 text-white shadow' : (isAbsent ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100')}">
+                            ✅ 出席 ${r.time ? r.time : ''}
+                        </button>
+                        <button onclick="setRecordStatus('${r.id}', 'ABSENT')" class="px-2.5 py-1.5 rounded-lg text-xs font-black transition ${isAbsent ? 'bg-white text-red-700 shadow' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}">
+                            ❌ 未到/缺席
+                        </button>
+                        ${proxyBtn}
+                    </div>
+                </td>
+                <td class="py-2.5 px-3">
+                    <input type="text" value="${(r.note || '').replace(/"/g, '&quot;')}" onchange="updateRecordNote('${r.id}', this.value)" placeholder="輸入備註..." class="w-full px-2.5 py-1.5 rounded-lg text-xs border ${isAbsent ? 'bg-red-700 text-white border-red-400 placeholder-red-200' : 'bg-white text-slate-700 border-slate-300'} focus:outline-none">
+                </td>
+            </tr>`;
+        }
+
+        function setRecordStatus(id, targetStatus) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            const personKey = getPersonIdentityKey(rec);
+            const matchedRecs = records.filter(r => getPersonIdentityKey(r) === personKey);
+            const linkedInfo = matchedRecs.length > 1
+                ? `（已自動連動 ${matchedRecs.map(x => '#' + x.docNo).join('、')}）`
+                : '';
+
+            if (rec.status === targetStatus) {
+                matchedRecs.forEach(item => {
+                    item.status = 'PENDING';
+                    item.time = '';
+                    item.proxy = '';
+                });
+                syncToCloud(`已重設 #${rec.docNo} ${rec.name} 為待報到狀態${linkedInfo}`);
+            } else {
+                const nowStr = targetStatus === 'CHECKED' ? getCurrentHHMM() : '';
+                matchedRecs.forEach(item => {
+                    item.status = targetStatus;
+                    item.time = nowStr;
+                    if (targetStatus === 'ABSENT') item.proxy = '';
+                });
+                const label = targetStatus === 'CHECKED' ? `✅ 已報到 (${nowStr})` : `❌ 標記缺席警示`;
+                syncToCloud(`第${rec.desk}桌｜#${rec.docNo} ${rec.name} ${label}${linkedInfo}`);
+                if (matchedRecs.length > 1) {
+                    showToast(`🔗 已連動更新【${rec.name}】全部 ${matchedRecs.length} 筆編號！`);
+                }
+            }
+        }
+
+        function markUnitAllChecked(seq, unitName) {
+            const nowStr = getCurrentHHMM();
+            const personKeysToMark = new Set();
+            let unitCount = 0;
+
+            records.forEach(r => {
+                const cleanUnit = r.unit.replace(/\(領隊\)/g, '').trim();
+                if (r.leaderSeq === seq && cleanUnit === unitName) {
+                    personKeysToMark.add(getPersonIdentityKey(r));
+                    unitCount++;
+                }
+            });
+
+            records.forEach(r => {
+                if (personKeysToMark.has(getPersonIdentityKey(r))) {
+                    if (r.status !== 'CHECKED') {
+                        r.status = 'CHECKED';
+                        r.time = nowStr;
+                    }
+                }
+            });
+
+            syncToCloud(`🎉 領隊序號 ${seq}【${unitName}】全員出席完成報到（共 ${unitCount} 人，含同名連動，時間 ${nowStr}）`);
+            showToast(`✅ 已標記【${unitName}】全員 ${unitCount} 人出席！`);
+        }
+
+        function undoUnitAllChecked(seq, unitName) {
+            const personKeysToUndo = new Set();
+            let unitCount = 0;
+
+            records.forEach(r => {
+                const cleanUnit = r.unit.replace(/\(領隊\)/g, '').trim();
+                if (r.leaderSeq === seq && cleanUnit === unitName) {
+                    personKeysToUndo.add(getPersonIdentityKey(r));
+                    unitCount++;
+                }
+            });
+
+            records.forEach(r => {
+                if (personKeysToUndo.has(getPersonIdentityKey(r))) {
+                    r.status = 'PENDING';
+                    r.time = '';
+                    r.proxy = '';
+                }
+            });
+
+            syncToCloud(`↩️ 已恢復領隊序號 ${seq}【${unitName}】全員（共 ${unitCount} 人）為待報到狀態`);
+            showToast(`↩️ 已恢復【${unitName}】為待報到狀態！`);
+        }
+
+        function updateRecordNote(id, val) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+            rec.note = val.trim();
+            syncToCloud(`更新備註：#${rec.docNo} ${rec.name}「${rec.note}」`);
+        }
+
+        // ==========================================
+        // 7. 檢錄組、頒獎組、主持人台帳與貴賓牆
+        // ==========================================
+        function toggleRecordLinedUp(id, isChecked) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+            rec.linedUp = Boolean(isChecked);
+            syncToCloud(`檢錄點名：梯次 ${rec.batch}｜#${rec.docNo} (${rec.seat}) ${rec.proxy || rec.name} ${rec.linedUp ? '✅ 已入列' : '取消入列'}`);
+        }
+
+        function toggleBatchCompleted(batch) {
+            const nextState = !completedBatches[batch];
+            if (nextState) {
+                completedBatches[batch] = true;
+            } else {
+                delete completedBatches[batch];
+            }
+            const title = getBatchDisplayName(batch);
+            populateFilterDropdowns();
+            syncToCloud(nextState
+                ? `🚩 檢錄組回報：【第 ${batch} 梯次｜${title}】已完成整隊待命！（已同步主持人與頒獎組）`
+                : `取消【第 ${batch} 梯次｜${title}】已完成整隊標記`);
+            showToast(nextState ? `✅ 已標記第 ${batch} 梯次完成整隊並通知舞台區！` : `已取消第 ${batch} 梯次整隊標記`);
+        }
+
+        function renderMarshalView() {
+            const container = document.getElementById('marshal-cards-container');
+            const sel = document.getElementById('marshal-batch-select');
+            const hideCompleted = document.getElementById('marshal-hide-completed')?.checked || false;
+            if (!container || !sel) return;
+
+            const selectedBatch = sel.value || 'ALL';
+            const allBatches = getSortedStageBatches();
+            let targetBatches = selectedBatch === 'ALL' ? allBatches : [selectedBatch];
+
+            if (hideCompleted) {
+                targetBatches = targetBatches.filter(b => !completedBatches[b]);
+            }
+
+            if (targetBatches.length === 0) {
+                container.innerHTML = `<div class="bg-white rounded-xl p-10 text-center text-emerald-700 border border-emerald-200 font-bold">
+                    <i class="fa-solid fa-circle-check text-3xl mb-2 text-emerald-500"></i>
+                    <p>目前顯示範圍內的梯次皆已完成整隊！（可取消勾選上方「隱藏已完成整隊的梯次」檢視全部）</p>
+                </div>`;
+                return;
+            }
+
+            container.innerHTML = targetBatches.map(batch => {
+                const list = records.filter(r => r.batch === batch);
+                const readyList = list.filter(r => r.status === 'CHECKED');
+                const waitList = list.filter(r => r.status !== 'CHECKED');
+                const linedUpCount = readyList.filter(r => r.linedUp).length;
+                const batchName = getBatchDisplayName(batch);
+                const isDone = Boolean(completedBatches[batch]);
+
+                return `
+                <div class="bg-white rounded-2xl shadow-sm border-2 ${isDone ? 'border-emerald-500' : 'border-slate-200'} overflow-hidden">
+                    <!-- 梯次標題列與已完成整隊按鈕 -->
+                    <div class="${isDone ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-100 border-slate-200'} px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="bg-blue-700 text-white text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg">第 ${batch} 梯次</span>
+                            <h3 class="font-black text-slate-900 text-sm sm:text-base">${batchName}</h3>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-white border border-slate-300 text-slate-700">
+                                已報到 ${readyList.length}/${list.length} 人（已入列 ${linedUpCount} 人）
+                            </span>
+                            ${isDone ? '<span class="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-600 text-white">✅ 已整隊待命</span>' : ''}
+                        </div>
+                        <button onclick="toggleBatchCompleted('${batch}')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 ${isDone ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white hover:bg-blue-50 text-blue-800 border border-blue-300'}">
+                            ${isDone ? '✅ 已完成整隊（點擊可取消）' : '🚩 標記已完成整隊'}
+                        </button>
+                    </div>
+
+                    <!-- 雙欄名單：已報到可整隊（含已入列勾選框） vs 尚未報到/缺席 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                        <div>
+                            <div class="bg-emerald-600 text-white px-4 py-2 font-black text-xs flex justify-between">
+                                <span>✅ 已報到可整隊名單（勾選「已入列」核對排隊）</span>
+                                <span>已入列 ${linedUpCount} / ${readyList.length} 人</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
+                                ${readyList.length === 0 ? `<p class="p-6 text-center text-xs text-slate-400">尚無已報到人員</p>` : readyList.map(r => `
+                                    <label class="px-4 py-2.5 flex items-center justify-between text-sm cursor-pointer transition ${r.linedUp ? 'bg-emerald-50/80' : 'hover:bg-slate-50'}">
+                                        <div class="flex items-center gap-2.5">
+                                            <input type="checkbox" ${r.linedUp ? 'checked' : ''} onchange="toggleRecordLinedUp('${r.id}', this.checked)" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                                            <div>
+                                                <span class="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 mr-1">#${r.docNo}</span>
+                                                <span class="font-mono text-xs font-black text-indigo-700 mr-1.5">${r.seat}</span>
+                                                <span class="font-black text-slate-900">${r.proxy ? `${r.proxy} (代 ${r.name})` : r.name}</span>
+                                                <span class="text-xs text-slate-500 block sm:inline sm:ml-1.5">${r.unit.replace(/\(領隊\)/g, '')}</span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs font-black shrink-0 ml-2 ${r.linedUp ? 'text-emerald-700' : 'text-slate-400'}">
+                                            ${r.linedUp ? '✅ 已入列' : (r.time || '已報到')}
+                                        </span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="bg-amber-600 text-white px-4 py-2 font-black text-xs flex justify-between">
+                                <span>⏳ 尚未報到 / 缺席席位</span>
+                                <span>${waitList.length} 人</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
+                                ${waitList.length === 0 ? `<p class="p-6 text-center text-xs text-emerald-600 font-bold">🎉 本梯次全員已到齊！</p>` : waitList.map(r => `
+                                    <div class="px-4 py-2.5 flex items-center justify-between text-sm ${r.status === 'ABSENT' ? 'bg-red-50 text-red-800' : ''}">
+                                        <div>
+                                            <span class="font-mono text-xs font-bold px-1.5 py-0.5 rounded ${r.status === 'ABSENT' ? 'bg-red-200 text-red-900' : 'bg-slate-100 text-slate-700'} mr-1">#${r.docNo}</span>
+                                            <span class="font-mono text-xs font-black text-indigo-700 mr-1.5">${r.seat}</span>
+                                            <span class="font-bold">${r.name}</span>
+                                            <span class="text-xs opacity-75 block sm:inline sm:ml-1.5">${r.unit.replace(/\(領隊\)/g, '')}</span>
+                                        </div>
+                                        <span class="text-xs font-black px-2 py-0.5 rounded shrink-0 ml-2 ${r.status === 'ABSENT' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'}">
+                                            ${r.status === 'ABSENT' ? '❌ 已標缺席' : '待報到'}
+                                        </span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderAwardView() {
+            const readyBar = document.getElementById('award-ready-batches-bar');
+            const doneKeys = Object.keys(completedBatches).filter(k => completedBatches[k]).sort((a, b) => {
+                const [a1, a2] = a.split('-').map(Number);
+                const [b1, b2] = b.split('-').map(Number);
+                return (a1 - b1) || ((a2 || 0) - (b2 || 0));
+            });
+            if (readyBar) {
+                if (doneKeys.length > 0) {
+                    readyBar.classList.remove('hidden');
+                    readyBar.innerHTML = `<span class="font-black text-emerald-800">🚩 檢錄組已完成整隊待命梯次：</span>` +
+                        doneKeys.map(b => `<span class="bg-emerald-600 text-white font-bold px-2 py-0.5 rounded">✅ 第 ${b} 梯次（${getBatchDisplayName(b)}）</span>`).join(' ');
+                } else {
+                    readyBar.classList.add('hidden');
+                }
+            }
+
+            const tbody = document.getElementById('award-pull-tbody');
+            if (!tbody) return;
+            const absentAwards = records.filter(r => r.status === 'ABSENT' && r.batch !== 'X');
+            if (absentAwards.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400 font-bold">目前無需抽離獎狀（尚無缺席受獎者）</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = absentAwards.map(r => `
+                <tr class="bg-red-50/60 hover:bg-red-50">
+                    <td class="py-3 px-4 font-black text-red-700">
+                        梯次 ${r.batch}
+                        ${completedBatches[r.batch] ? '<span class="ml-1 text-[11px] bg-emerald-600 text-white px-1.5 py-0.5 rounded">✅已整隊</span>' : ''}
+                    </td>
+                    <td class="py-3 px-4 font-mono font-bold">#${r.docNo}</td>
+                    <td class="py-3 px-4 font-mono font-bold text-indigo-700">${r.seat}</td>
+                    <td class="py-3 px-4 font-black text-slate-900">${r.name}</td>
+                    <td class="py-3 px-4 text-xs text-slate-600">${r.unit}</td>
+                    <td class="py-3 px-4 font-bold">${r.award}</td>
+                    <td class="py-3 px-4 text-xs text-red-700 font-bold">${r.note || '—'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderMCView() {
+            const mcReadyBar = document.getElementById('mc-ready-batches-bar');
+            const doneKeys = Object.keys(completedBatches).filter(k => completedBatches[k]).sort((a, b) => {
+                const [a1, a2] = a.split('-').map(Number);
+                const [b1, b2] = b.split('-').map(Number);
+                return (a1 - b1) || ((a2 || 0) - (b2 || 0));
+            });
+            if (mcReadyBar) {
+                if (doneKeys.length > 0) {
+                    mcReadyBar.classList.remove('hidden');
+                    mcReadyBar.innerHTML = `<span class="font-black text-emerald-300">🚩 檢錄組已完成整隊梯次（可準備唱名上台）：</span>` +
+                        doneKeys.map(b => `<span class="inline-block bg-emerald-600 text-white font-bold px-2 py-0.5 rounded ml-1 mt-0.5">✅ 第 ${b} 梯次｜${getBatchDisplayName(b)}</span>`).join('');
+                } else {
+                    mcReadyBar.classList.add('hidden');
+                }
+            }
+
+            const vipListEl = document.getElementById('mc-vip-list');
+            const arrivedVips = vips.filter(v => v.status === 'ARRIVED');
+            const announcedCount = arrivedVips.filter(v => v.announced).length;
+            document.getElementById('mc-vip-arrived-count').textContent = arrivedVips.length;
+            document.getElementById('mc-vip-announced-count').textContent = announcedCount;
+
+            if (vipListEl) {
+                if (arrivedVips.length === 0) {
+                    vipListEl.innerHTML = `<div class="col-span-full bg-white/80 rounded-xl p-4 text-center text-xs text-amber-800 border border-amber-200">
+                        目前尚無貴賓回報抵達，貴賓組點選「已到場」或「改派代表」後將即時同步顯示於此。
+                    </div>`;
+                } else {
+                    vipListEl.innerHTML = arrivedVips.map(v => {
+                        const displayTitleName = v.proxy
+                            ? `<span class="line-through text-slate-400 text-xs">${v.title} ${v.name}</span> <span class="text-indigo-700 font-black">👉 代表：${v.proxy}</span>`
+                            : `<span class="font-black text-slate-900">${v.title} ${v.name}</span>`;
+                        return `
+                        <div class="p-3 rounded-xl border ${v.announced ? 'bg-slate-100 border-slate-300 opacity-75' : 'bg-white border-amber-300 shadow-sm'} flex items-center justify-between gap-2">
+                            <div>
+                                <div class="text-sm">${displayTitleName}</div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">抵達 ${v.time || ''} ${v.task ? '｜' + v.task : ''}</div>
+                            </div>
+                            <button onclick="toggleVipAnnounced('${v.id}')" class="px-3 py-1.5 rounded-lg text-xs font-black shrink-0 transition ${v.announced ? 'bg-slate-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'}">
+                                ${v.announced ? '✅ 已唱名' : '🎙️ 標記已唱名'}
+                            </button>
+                        </div>`;
+                    }).join('');
+                }
+            }
+
+            const tbody = document.getElementById('mc-tbody');
+            const batchVal = document.getElementById('mc-batch-select')?.value || 'ALL';
+            if (!tbody) return;
+
+            const stageList = records.filter(r => r.batch !== 'X' && (batchVal === 'ALL' || r.batch === batchVal));
+            if (stageList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-bold">尚無受獎人台帳資料</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = stageList.map(r => {
+                const isAbsent = r.status === 'ABSENT';
+                const isChecked = r.status === 'CHECKED';
+                const isBatchReady = Boolean(completedBatches[r.batch]);
+                const nameCell = r.proxy
+                    ? `<span class="line-through text-slate-400 mr-2">${r.name}</span><span class="bg-indigo-600 text-white text-xs font-black px-2 py-0.5 rounded">👉 實際唱名：${r.proxy}</span>`
+                    : `<span class="font-black text-base ${isAbsent ? 'line-through text-slate-400' : 'text-slate-900'}">${r.name}</span>`;
+
+                return `
+                <tr class="${isAbsent ? 'bg-slate-100 opacity-60' : (isChecked ? 'bg-emerald-50/40' : 'bg-white')}">
+                    <td class="py-2.5 px-4 font-black text-xs text-indigo-700">
+                        <div>梯次 ${r.batch}</div>
+                        ${isBatchReady ? '<span class="inline-block mt-0.5 text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-600 text-white">✅ 已整隊待命</span>' : ''}
+                    </td>
+                    <td class="py-2.5 px-4 font-mono text-xs">#${r.docNo} / ${r.seat}</td>
+                    <td class="py-2.5 px-4">${nameCell}</td>
+                    <td class="py-2.5 px-4 text-xs text-slate-600 ${isAbsent ? 'line-through' : ''}">${r.unit.replace(/\(領隊\)/g, '')}</td>
+                    <td class="py-2.5 px-4 text-xs font-bold ${isAbsent ? 'line-through' : ''}">${r.award}</td>
+                    <td class="py-2.5 px-4">
+                        ${isAbsent ? '<span class="text-xs font-black text-red-600">❌ 缺席跳過</span>' : (isChecked ? '<span class="text-xs font-black text-emerald-600">✅ 已報到</span>' : '<span class="text-xs text-slate-400">待報到</span>')}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderVIPView() {
+            const grid = document.getElementById('vip-grid');
+            if (!grid) return;
+            if (vips.length === 0) {
+                grid.innerHTML = `<div class="col-span-full bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-200">尚無貴賓名單，請點擊上方按鈕新增或匯入。</div>`;
+                return;
+            }
+            grid.innerHTML = vips.map(v => {
+                const isArrived = v.status === 'ARRIVED';
+                return `
+                <div class="bg-white rounded-xl shadow-sm border ${isArrived ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-200'} p-4 flex flex-col justify-between space-y-3">
+                    <div>
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">${v.title}</span>
+                            <div class="flex items-center gap-1">
+                                ${isArrived ? `<button onclick="resetVipStatus('${v.id}')" title="重設為未抵達" class="text-slate-400 hover:text-amber-600 text-xs px-1.5 py-0.5"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
+                                <button onclick="deleteVip('${v.id}')" title="刪除此貴賓" class="text-slate-300 hover:text-red-600 text-xs px-1.5 py-0.5"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-black text-slate-900 mt-1.5">${v.name}</h3>
+                        ${v.proxy ? `<div class="mt-1 text-xs font-black text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg">🔄 改派代表：${v.proxy}</div>` : ''}
+                        <p class="text-xs text-slate-600 mt-2"><i class="fa-solid fa-award text-amber-500 mr-1"></i> ${v.task || '觀禮貴賓'}</p>
+                        ${v.note ? `<p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-note-sticky text-slate-400 mr-1"></i> ${v.note}</p>` : ''}
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex gap-2">
+                        <button onclick="markVipArrived('${v.id}')" class="flex-1 py-2 px-3 rounded-lg text-xs font-black transition ${isArrived && !v.proxy ? 'bg-emerald-600 text-white shadow' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'}">
+                            ✅ 已到場 ${isArrived && v.time ? v.time : ''}
+                        </button>
+                        <button onclick="openVipProxyModal('${v.id}')" class="flex-1 py-2 px-3 rounded-lg text-xs font-black transition ${isArrived && v.proxy ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'}">
+                            🔄 改派代表
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function markVipArrived(id) {
+            const v = vips.find(x => x.id === id);
+            if (!v) return;
+            v.status = 'ARRIVED';
+            v.proxy = '';
+            v.time = getCurrentHHMM();
+            syncToCloud(`👑 貴賓抵達：【${v.title} ${v.name}】已到場（同步至主持人台帳）`);
+            showToast(`✅ 已回報 ${v.name} 到場並同步至主持人台帳！`);
+        }
+
+        function resetVipStatus(id) {
+            const v = vips.find(x => x.id === id);
+            if (!v) return;
+            v.status = 'PENDING';
+            v.proxy = '';
+            v.announced = false;
+            v.time = '';
+            syncToCloud(`已重設貴賓【${v.name}】狀態`);
+        }
+
+        function deleteVip(id) {
+            vips = vips.filter(x => x.id !== id);
+            syncToCloud(`已移除一筆貴賓資料`);
+        }
+
+        function toggleVipAnnounced(id) {
+            const v = vips.find(x => x.id === id);
+            if (!v) return;
+            v.announced = !v.announced;
+            syncToCloud(v.announced ? `🎙️ 主持人已唱名介紹貴賓：【${v.proxy || v.name}】` : `取消貴賓唱名標記：【${v.proxy || v.name}】`);
+        }
+
+        function openAddVipModal() {
+            document.getElementById('new-vip-title').value = '';
+            document.getElementById('new-vip-name').value = '';
+            document.getElementById('new-vip-task').value = '';
+            document.getElementById('new-vip-note').value = '';
+            document.getElementById('add-vip-modal').classList.remove('hidden');
+        }
+
+        function closeAddVipModal() {
+            document.getElementById('add-vip-modal').classList.add('hidden');
+        }
+
+        function saveNewVip() {
+            const title = document.getElementById('new-vip-title').value.trim();
+            const name = document.getElementById('new-vip-name').value.trim();
+            const task = document.getElementById('new-vip-task').value.trim();
+            const note = document.getElementById('new-vip-note').value.trim();
+
+            if (!title || !name) {
+                showToast("⚠️ 請輸入貴賓單位職稱與姓名！");
+                return;
+            }
+
+            vips.push({
+                id: "vip_" + Date.now(),
+                title: title,
+                name: name,
+                task: task,
+                note: note,
+                status: "PENDING",
+                proxy: "",
+                announced: false,
+                time: ""
+            });
+            closeAddVipModal();
+            syncToCloud(`新增貴賓：【${title} ${name}】`);
+            showToast(`✅ 已新增貴賓【${title} ${name}】並同步至雲端！`);
+        }
+
+        // ==========================================
+        // 8. 改派代表與匯入/匯出/載入預設視窗控制
+        // ==========================================
+        function openRecordProxyModal(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+            currentProxyTarget = { type: 'record', id };
+            document.getElementById('proxy-target-info').textContent = `原受獎人/代表：#${rec.docNo} ${rec.name}（${rec.unit}）`;
+            document.getElementById('proxy-name-input').value = rec.proxy || "";
+            document.getElementById('proxy-modal').classList.remove('hidden');
+        }
+
+        function openVipProxyModal(id) {
+            const v = vips.find(x => x.id === id);
+            if (!v) return;
+            currentProxyTarget = { type: 'vip', id };
+            document.getElementById('proxy-target-info').textContent = `原邀請貴賓：${v.title} ${v.name}`;
+            document.getElementById('proxy-name-input').value = v.proxy || "";
+            document.getElementById('proxy-modal').classList.remove('hidden');
+        }
+
+        function closeProxyModal() {
+            document.getElementById('proxy-modal').classList.add('hidden');
+            currentProxyTarget = null;
+        }
+
+        function saveProxyData() {
+            const proxyName = document.getElementById('proxy-name-input').value.trim();
+            if (!proxyName || !currentProxyTarget) {
+                showToast("⚠️ 請輸入實際出席代表姓名！");
+                return;
+            }
+            const nowStr = getCurrentHHMM();
+            if (currentProxyTarget.type === 'record') {
+                const rec = records.find(r => r.id === currentProxyTarget.id);
+                if (rec) {
+                    rec.status = 'CHECKED';
+                    rec.proxy = proxyName;
+                    rec.time = nowStr;
+                    syncToCloud(`🔄 改派代表出席：#${rec.docNo} ${rec.name} 由【${proxyName}】代表出席`);
+                }
+            } else if (currentProxyTarget.type === 'vip') {
+                const v = vips.find(x => x.id === currentProxyTarget.id);
+                if (v) {
+                    v.status = 'ARRIVED';
+                    v.proxy = proxyName;
+                    v.time = nowStr;
+                    syncToCloud(`👑 貴賓改派代表：【${v.title} ${v.name}】改派【${proxyName}】出席`);
+                }
+            }
+            closeProxyModal();
+            showToast(`✅ 已登記代表【${proxyName}】並標記出席！`);
+        }
+
+        function openRosterImportModal() {
+            document.getElementById('roster-import-modal').classList.remove('hidden');
+        }
+        function closeRosterImportModal() {
+            document.getElementById('roster-import-modal').classList.add('hidden');
+        }
+        function executeRosterImport() {
+            const rawText = document.getElementById('roster-import-textarea').value.trim();
+            if (!rawText) {
+                showToast("⚠️ 請先貼上 Excel 資料！");
+                return;
+            }
+            const lines = rawText.split(/\r?\n/).filter(l => l.trim());
+            const parsed = [];
+            lines.forEach((line, idx) => {
+                const cols = line.includes('\t') ? line.split('\t') : line.split(',');
+                if (idx === 0 && (cols[0] || "").includes("編號") && (cols[4] || "").includes("姓名")) {
+                    return;
+                }
+                if (cols.length >= 5) {
+                    const deskRaw = (cols[2] || "1").trim().replace(/[^0-9]/g, "") || "1";
+                    parsed.push({
+                        id: "rec_imp_" + idx,
+                        docNo: (cols[0] || "").trim(),
+                        leaderSeq: (cols[1] || "").trim(),
+                        desk: deskRaw,
+                        seat: (cols[3] || "").trim(),
+                        name: (cols[4] || "").trim(),
+                        unit: (cols[5] || "").trim(),
+                        award: (cols[6] || "").trim(),
+                        batch: (cols[7] || "1-1").trim(),
+                        status: "PENDING",
+                        time: "",
+                        note: "",
+                        proxy: ""
+                    });
+                }
+            });
+            if (parsed.length === 0) {
+                showToast("⚠️ 格式解析失敗，請確認每行包含姓名與必要欄位！");
+                return;
+            }
+            records = enforceAwardStageRules(parsed);
+            populateFilterDropdowns();
+            syncToCloud(`📥 已從 Excel 匯入真實名冊（共 ${records.length} 筆）`);
+            closeRosterImportModal();
+            showToast(`✅ 成功匯入 ${records.length} 筆真實名冊並同步至雲端！`);
+        }
+
+        function exportRosterCSV() {
+            if (records.length === 0) {
+                showToast("⚠️ 目前尚無名冊資料可匯出！");
+                return;
+            }
+            const headers = ["手冊編號", "領隊序號", "報到桌次", "座位編號", "姓名", "改派代表", "服務單位", "獎項名稱", "受獎組別", "報到狀態", "報到時間", "現場備註"];
+            const statusLabel = { CHECKED: "已報到", ABSENT: "未到/缺席", PENDING: "待報到" };
+            const rows = records.map(r => [
+                r.docNo,
+                r.leaderSeq,
+                r.desk,
+                r.seat,
+                r.name,
+                r.proxy || "",
+                r.unit,
+                r.award,
+                r.batch,
+                statusLabel[r.status] || "待報到",
+                r.time || "",
+                r.note || ""
+            ].map(val => `"${String(val || "").replace(/"/g, '""')}"`).join(","));
+
+            const csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `115年志工表揚大會_現場報到紀錄_${getCurrentHHMM().replace(":", "")}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("✅ 已匯出最新報到紀錄報表 (CSV)！");
+        }
+
+        function openVipImportModal() {
+            document.getElementById('vip-import-modal').classList.remove('hidden');
+        }
+        function closeVipImportModal() {
+            document.getElementById('vip-import-modal').classList.add('hidden');
+        }
+        function executeVipImport() {
+            const rawText = document.getElementById('vip-import-textarea').value.trim();
+            if (!rawText) return;
+            const mode = document.querySelector('input[name="vip-import-mode"]:checked')?.value || 'append';
+            const lines = rawText.split(/\r?\n/).filter(l => l.trim());
+            const imported = [];
+            lines.forEach((line, idx) => {
+                const cols = line.includes('\t') ? line.split('\t') : line.split(',');
+                if (cols.length >= 2) {
+                    imported.push({
+                        id: "vip_imp_" + Date.now() + "_" + idx,
+                        title: (cols[0] || "").trim(),
+                        name: (cols[1] || "").trim(),
+                        task: (cols[2] || "").trim(),
+                        note: (cols[3] || "").trim(),
+                        status: "PENDING",
+                        proxy: "",
+                        announced: false,
+                        time: ""
+                    });
+                }
+            });
+            if (imported.length === 0) return;
+            vips = mode === 'replace' ? imported : [...vips, ...imported];
+            syncToCloud(`📥 已匯入 ${imported.length} 筆貴賓名單`);
+            closeVipImportModal();
+            showToast(`✅ 成功匯入 ${imported.length} 位貴賓！`);
+        }
+
+        function openResetDefaultModal() {
+            document.getElementById('reset-default-modal').classList.remove('hidden');
+        }
+        function closeResetDefaultModal() {
+            document.getElementById('reset-default-modal').classList.add('hidden');
+        }
+        function executeResetToPdfRoster() {
+            closeResetDefaultModal();
+            records = buildDefaultRecords();
+            broadcastMsg = "📥 已載入完整 " + records.length + " 筆最新受獎名冊！";
+            document.getElementById('latest-broadcast').textContent = broadcastMsg;
+            dbRef.set({
+                records: records,
+                vips: vips,
+                completedBatches: completedBatches,
+                broadcastMsg: broadcastMsg,
+                updatedAt: Date.now()
+            }).then(() => {
+                populateFilterDropdowns();
+                refreshAllViews();
+                showToast("✅ 已更新為完整 473 筆最新名冊並同步雲端！");
+            });
+        }
+
+        function showToast(message) {
+            const box = document.getElementById('toast-box');
+            const msgEl = document.getElementById('toast-msg');
+            if (!box || !msgEl) return;
+            msgEl.textContent = message;
+            box.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                box.classList.add('translate-y-20', 'opacity-0');
+            }, 3200);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+    </script>
+</body>
+</html>
